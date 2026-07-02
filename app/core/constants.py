@@ -44,5 +44,6 @@ REDIS_KEY_SETTING = "setting:{key}"
 REDIS_KEY_PREMIUM = "premium:{user_id}"
 REDIS_KEY_BROADCAST_LOCK = "broadcast:lock"
 REDIS_KEY_STATS_TODAY = "stats:today:{metric}"
+REDIS_KEY_THROTTLE = "throttle:{user_id}"
 
 BROADCAST_MESSAGES_PER_SECOND = 25
