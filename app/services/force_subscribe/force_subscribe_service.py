@@ -28,8 +28,8 @@ from app.core.logger import get_logger
 from app.database.models import Channel
 from app.database.redis_client import get_redis
 from app.database.repositories.channel_repository import ChannelRepository
-from app.database.repositories.premium_user_repository import PremiumUserRepository
 from app.services.admin.admin_service import AdminService
+from app.services.premium.premium_service import PremiumService
 from app.services.settings.settings_service import SettingsService
 
 logger = get_logger(__name__)
@@ -94,7 +94,7 @@ class ForceSubscribeService:
         self._session = session
         self._bot = bot
         self._channel_repo = ChannelRepository(session)
-        self._premium_repo = PremiumUserRepository(session)
+        self._premium_service = PremiumService(session)
         self._admin_service = AdminService(session)
         self._settings_service = SettingsService(session)
 
@@ -107,7 +107,7 @@ class ForceSubscribeService:
         """
         if not await self._settings_service.get_bool("force_subscribe_enabled", default=True):
             return []
-        if await self._premium_repo.get_active_for_user(user_id) is not None:
+        if await self._premium_service.is_premium(user_id):
             return []
         if await self._admin_service.is_admin(user_id):
             return []

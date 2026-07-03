@@ -23,3 +23,22 @@ class PremiumUserRepository(BaseRepository[PremiumUser]):
         )
         result = await self.session.execute(stmt)
         return result.scalars().first()
+
+    async def find_expiring(self, now: datetime, until: datetime) -> list[PremiumUser]:
+        """Active rows whose ``expires_at`` falls in ``(now, until]`` — the 24h-warning scheduler's source query."""
+        stmt = select(PremiumUser).where(
+            PremiumUser.is_active.is_(True),
+            PremiumUser.expires_at > now,
+            PremiumUser.expires_at <= until,
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def find_expired(self, now: datetime) -> list[PremiumUser]:
+        """Active rows whose ``expires_at`` has already passed — ``PremiumService.deactivate_expired``'s source query."""
+        stmt = select(PremiumUser).where(
+            PremiumUser.is_active.is_(True),
+            PremiumUser.expires_at <= now,
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

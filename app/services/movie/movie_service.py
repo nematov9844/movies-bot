@@ -20,7 +20,7 @@ from app.database.redis_client import get_redis
 from app.database.repositories.category_repository import CategoryRepository
 from app.database.repositories.movie_repository import MovieRepository
 from app.database.repositories.movie_view_repository import MovieViewRepository
-from app.database.repositories.premium_user_repository import PremiumUserRepository
+from app.services.premium.premium_service import PremiumService
 
 # Sentinel distinguishing "leave this field alone" from "set it to None" in
 # ``MovieService.update_movie`` — plain ``None`` can't be used as that
@@ -55,7 +55,7 @@ class MovieService:
         self._repo = MovieRepository(session)
         self._category_repo = CategoryRepository(session)
         self._view_repo = MovieViewRepository(session)
-        self._premium_repo = PremiumUserRepository(session)
+        self._premium_service = PremiumService(session)
 
     async def create_movie(
         self,
@@ -188,8 +188,7 @@ class MovieService:
         """``True`` unless ``movie`` is premium-only and ``user_id`` has no active premium."""
         if not movie.is_premium:
             return True
-        premium = await self._premium_repo.get_active_for_user(user_id)
-        return premium is not None
+        return await self._premium_service.is_premium(user_id)
 
     async def record_view(self, movie_id: int, user_id: int) -> None:
         """Insert a ``movie_views`` row and bump ``Movie.view_count`` in one flush."""

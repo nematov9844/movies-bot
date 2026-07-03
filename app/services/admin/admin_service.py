@@ -37,6 +37,15 @@ class AdminService:
         """
         return await self._repo.get_by_user_id(user_id)
 
+    async def list_active(self) -> list[Admin]:
+        """All currently-active admin rows (any role).
+
+        Used by the premium purchase-intent flow to notify every active
+        admin's Telegram DM, and available to any future caller needing the
+        same "who can I ping" list.
+        """
+        return await self._repo.get_many(is_active=True)
+
     async def get_role(self, user_id: int) -> AdminRole | None:
         """The active admin's role for ``user_id``, or ``None`` if not an active admin."""
         admin = await self._repo.get_by_user_id(user_id)

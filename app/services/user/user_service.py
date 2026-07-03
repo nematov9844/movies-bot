@@ -7,9 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.constants import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
 from app.database.models import User
 from app.database.repositories.movie_view_repository import MovieViewRepository
-from app.database.repositories.premium_user_repository import PremiumUserRepository
 from app.database.repositories.referral_repository import ReferralRepository
 from app.database.repositories.user_repository import UserRepository
+from app.services.premium.premium_service import PremiumService
 
 
 @dataclass(slots=True)
@@ -38,7 +38,7 @@ class UserService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self._repo = UserRepository(session)
-        self._premium_repo = PremiumUserRepository(session)
+        self._premium_service = PremiumService(session)
         self._movie_view_repo = MovieViewRepository(session)
         self._referral_repo = ReferralRepository(session)
 
@@ -115,7 +115,7 @@ class UserService:
         if user is None:
             return None
 
-        premium = await self._premium_repo.get_active_for_user(user_id)
+        premium = await self._premium_service.get_active(user_id)
         movies_watched = await self._movie_view_repo.count(user_id=user_id)
         referral_count = await self.get_referral_count(user_id)
 

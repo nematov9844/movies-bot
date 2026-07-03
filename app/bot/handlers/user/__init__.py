@@ -4,6 +4,7 @@ from app.bot.handlers.user import force_subscribe as user_force_subscribe
 from app.bot.handlers.user import invite as user_invite
 from app.bot.handlers.user import movie as user_movie
 from app.bot.handlers.user import movie_search as user_movie_search
+from app.bot.handlers.user import premium as user_premium
 from app.bot.handlers.user import profile as user_profile
 from app.bot.handlers.user import settings as user_settings
 from app.bot.handlers.user import start as user_start
@@ -14,6 +15,7 @@ user_router.include_router(user_start.router)
 user_router.include_router(user_profile.router)
 user_router.include_router(user_settings.router)
 user_router.include_router(user_invite.router)
+user_router.include_router(user_premium.router)
 # Not content-gated: must always be reachable so a blocked user can retry.
 user_router.include_router(user_force_subscribe.router)
 # Browse submenu (exact-text "🔍 Kino qidirish" button + its own FSM-scoped
