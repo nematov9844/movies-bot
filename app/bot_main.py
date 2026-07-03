@@ -3,6 +3,7 @@ import asyncio
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.fsm.storage.redis import RedisStorage
 
 from app.bot.middlewares import (
     DbSessionMiddleware,
@@ -44,7 +45,11 @@ async def main() -> None:
         token=settings.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
-    dp = Dispatcher()
+    # Redis-backed FSM storage: the add-movie wizard (Phase 6) is the first
+    # flow needing multi-step state, and the TZ designates Redis as the
+    # bot's FSM store, so state survives bot restarts/redeploys instead of
+    # living only in process memory.
+    dp = Dispatcher(storage=RedisStorage.from_url(settings.redis_url))
     _setup_middlewares(dp)
     dp.include_router(main_router)
 
