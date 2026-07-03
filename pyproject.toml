@@ -16,7 +16,11 @@ dependencies = [
     "apscheduler>=3.10",
     "structlog>=24.1",
     "passlib[bcrypt]>=1.7.4",
-    "bcrypt>=4.1",
+    # passlib 1.7.4 (last release, effectively unmaintained) crashes at
+    # backend-init time on bcrypt>=4.0: its wraparound-bug self-test hashes a
+    # >72-byte probe string, which bcrypt>=4.0 rejects with ValueError instead
+    # of the old silent truncation. Pinned <4.0 until passlib ships a fix.
+    "bcrypt>=3.2,<4.0",
     "pyjwt>=2.9",
     "slowapi>=0.1.9",
     "prometheus-fastapi-instrumentator>=7.0",

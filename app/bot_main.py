@@ -13,6 +13,8 @@ from app.bot.middlewares import (
 from app.bot.routers import main_router
 from app.core.config import settings
 from app.core.logger import get_logger, setup_logging
+from app.database.session import async_session_factory
+from app.services.admin.admin_service import AdminService
 
 logger = get_logger(__name__)
 
@@ -28,8 +30,15 @@ def _setup_middlewares(dp: Dispatcher) -> None:
     dp.update.outer_middleware(ThrottlingMiddleware())
 
 
+async def _ensure_owner_seeded() -> None:
+    async with async_session_factory() as session:
+        await AdminService(session).ensure_owner_seeded()
+        await session.commit()
+
+
 async def main() -> None:
     setup_logging()
+    await _ensure_owner_seeded()
 
     bot = Bot(
         token=settings.bot_token,
