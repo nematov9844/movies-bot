@@ -40,6 +40,7 @@ SUPPORTED_LANGUAGES = ("uz", "ru")
 REDIS_KEY_MOVIE_CODE = "movie:code:{code}"
 REDIS_KEY_FORCE_SUB = "fs:{user_id}:{channel_id}"
 REDIS_KEY_CHANNEL_JOINED = "fs:joined:{channel_id}"
+REDIS_KEY_PENDING_UPDATE = "fs:pending:{user_id}"
 REDIS_KEY_SETTING = "setting:{key}"
 REDIS_KEY_PREMIUM = "premium:{user_id}"
 REDIS_KEY_BROADCAST_LOCK = "broadcast:lock"
@@ -56,3 +57,7 @@ TOP_MOVIES_LIMIT = 10
 NEW_MOVIES_LIMIT = 10
 POPULAR_MOVIES_LIMIT = 10
 POPULAR_MOVIES_WINDOW_DAYS = 7
+
+# Force-subscribe module (Phase 7)
+FORCE_SUB_CACHE_TTL_SECONDS = 60
+PENDING_UPDATE_TTL_SECONDS = 600

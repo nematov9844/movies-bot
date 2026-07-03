@@ -7,6 +7,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 
 from app.bot.middlewares import (
     DbSessionMiddleware,
+    ForceSubscribeMiddleware,
     MaintenanceMiddleware,
     ThrottlingMiddleware,
     UserUpsertMiddleware,
@@ -29,6 +30,15 @@ def _setup_middlewares(dp: Dispatcher) -> None:
     dp.update.outer_middleware(UserUpsertMiddleware())
     dp.update.outer_middleware(MaintenanceMiddleware())
     dp.update.outer_middleware(ThrottlingMiddleware())
+
+    # Inner (not outer) middleware: per-handler flags like `content_gate` are
+    # only resolvable once aiogram has matched a specific handler, which
+    # only happens inside the message/callback_query observers, not on the
+    # shared dp.update observer used above. See ForceSubscribeMiddleware's
+    # docstring for the full reasoning.
+    force_subscribe_middleware = ForceSubscribeMiddleware()
+    dp.message.middleware(force_subscribe_middleware)
+    dp.callback_query.middleware(force_subscribe_middleware)
 
 
 async def _ensure_owner_seeded() -> None:
