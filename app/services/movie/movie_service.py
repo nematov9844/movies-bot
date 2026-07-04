@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import MOVIE_CODE_CACHE_TTL_SECONDS, REDIS_KEY_MOVIE_CODE
+from app.core.metrics import bot_movies_sent_total
 from app.database.models import Movie, MovieView
 from app.database.redis_client import get_redis
 from app.database.repositories.category_repository import CategoryRepository
@@ -221,6 +222,7 @@ class MovieService:
             movie.view_count += 1
         await self._session.flush()
         await increment_movies_sent()
+        bot_movies_sent_total.inc()
 
     async def search(self, query: str, page: int, size: int) -> tuple[list[Movie], int]:
         """Title ``ILIKE`` search over active movies, paginated."""

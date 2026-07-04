@@ -1,9 +1,11 @@
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.routes import (
     admins,
@@ -20,11 +22,17 @@ from app.api.routes import (
 from app.api.routes import settings as settings_routes
 from app.core.config import settings
 from app.core.logger import get_logger, setup_logging
+from app.core.sentry import setup_sentry
 from app.database.session import async_session_factory
 from app.services.admin.admin_service import AdminService
 from app.services.stats.stats_service import increment_api_requests, increment_errors
 
 logger = get_logger(__name__)
+
+# Before the FastAPI app is constructed: Sentry's Starlette/FastAPI
+# integrations only auto-enable if sentry_sdk.init() has already run by the
+# time the app object is created.
+setup_sentry()
 
 
 @asynccontextmanager
@@ -60,6 +68,10 @@ app.include_router(stats.router)
 app.include_router(audit_logs.router)
 app.include_router(admins.router)
 
+# Phase 14: standard HTTP metrics (request count/latency/status) at
+# GET /metrics, scraped by prometheus.yml's movie_platform_api job.
+Instrumentator().instrument(app).expose(app)
+
 
 @app.middleware("http")
 async def count_requests(
@@ -80,4 +92,5 @@ async def handle_unhandled_exception(request: Request, exc: Exception) -> JSONRe
     """
     logger.exception("api_unhandled_error", path=request.url.path, error=str(exc))
     await increment_errors()
+    sentry_sdk.capture_exception(exc)
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})

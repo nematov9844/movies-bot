@@ -1,21 +1,26 @@
 import asyncio
 
+import sentry_sdk
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import ErrorEvent
+from prometheus_client import start_http_server
 
 from app.bot.middlewares import (
     DbSessionMiddleware,
     ForceSubscribeMiddleware,
     MaintenanceMiddleware,
+    MetricsMiddleware,
     ThrottlingMiddleware,
     UserUpsertMiddleware,
 )
 from app.bot.routers import main_router
 from app.core.config import settings
 from app.core.logger import get_logger, setup_logging
+from app.core.metrics import bot_errors_total
+from app.core.sentry import setup_sentry
 from app.database.session import async_session_factory
 from app.scheduler import create_scheduler
 from app.services.admin.admin_service import AdminService
@@ -23,12 +28,16 @@ from app.services.stats.stats_service import increment_errors
 
 logger = get_logger(__name__)
 
+METRICS_PORT = 9100
+
 
 def _setup_middlewares(dp: Dispatcher) -> None:
-    # Order matters: DB session must exist before anything that touches the
-    # database; the user must be upserted before maintenance/throttling look
-    # it up. Registered on dp.update so they apply to every update type
-    # (message, callback_query, ...), not just messages.
+    # Order matters: metrics counts literally every update regardless of
+    # what happens later; DB session must exist before anything that
+    # touches the database; the user must be upserted before maintenance/
+    # throttling look it up. Registered on dp.update so they apply to every
+    # update type (message, callback_query, ...), not just messages.
+    dp.update.outer_middleware(MetricsMiddleware())
     dp.update.outer_middleware(DbSessionMiddleware())
     dp.update.outer_middleware(UserUpsertMiddleware())
     dp.update.outer_middleware(MaintenanceMiddleware())
@@ -55,15 +64,25 @@ async def _handle_error(event: ErrorEvent) -> None:
 
     By the time this fires, ``DbSessionMiddleware`` has already rolled back
     and closed the update's session, so this only touches Redis (today's
-    live ``errors`` counter) — no DB session to hand it even if it needed
-    one.
+    live ``errors`` counter) and the in-process Prometheus counter — no DB
+    session to hand it even if it needed one. Sentry has no aiogram
+    integration, so this is also the one place that has to explicitly
+    forward the exception to it.
     """
     logger.exception("bot_unhandled_error", update_id=event.update.update_id, error=str(event.exception))
     await increment_errors()
+    bot_errors_total.inc()
+    sentry_sdk.capture_exception(event.exception)
 
 
 async def main() -> None:
     setup_logging()
+    setup_sentry()
+    # Phase 14: bot_updates_total/bot_movies_sent_total/bot_errors_total on
+    # their own port, scraped by prometheus.yml's movie_platform_bot job —
+    # separate from the API's /metrics since the bot has no HTTP server of
+    # its own to attach an endpoint to.
+    start_http_server(METRICS_PORT)
     await _ensure_owner_seeded()
 
     bot = Bot(
