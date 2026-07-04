@@ -4,6 +4,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.redis import RedisStorage
+from aiogram.types import ErrorEvent
 
 from app.bot.middlewares import (
     DbSessionMiddleware,
@@ -17,6 +18,7 @@ from app.core.config import settings
 from app.core.logger import get_logger, setup_logging
 from app.database.session import async_session_factory
 from app.services.admin.admin_service import AdminService
+from app.services.stats.stats_service import increment_errors
 
 logger = get_logger(__name__)
 
@@ -47,6 +49,18 @@ async def _ensure_owner_seeded() -> None:
         await session.commit()
 
 
+async def _handle_error(event: ErrorEvent) -> None:
+    """Global catch-all for exceptions any middleware/handler raises while processing an update.
+
+    By the time this fires, ``DbSessionMiddleware`` has already rolled back
+    and closed the update's session, so this only touches Redis (today's
+    live ``errors`` counter) — no DB session to hand it even if it needed
+    one.
+    """
+    logger.exception("bot_unhandled_error", update_id=event.update.update_id, error=str(event.exception))
+    await increment_errors()
+
+
 async def main() -> None:
     setup_logging()
     await _ensure_owner_seeded()
@@ -62,6 +76,7 @@ async def main() -> None:
     dp = Dispatcher(storage=RedisStorage.from_url(settings.redis_url))
     _setup_middlewares(dp)
     dp.include_router(main_router)
+    dp.errors.register(_handle_error)
 
     logger.info("bot_starting", environment=settings.environment)
     await bot.delete_webhook(drop_pending_updates=True)

@@ -1,13 +1,16 @@
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.routes import auth, health
 from app.core.config import settings
 from app.core.logger import get_logger, setup_logging
 from app.database.session import async_session_factory
 from app.services.admin.admin_service import AdminService
+from app.services.stats.stats_service import increment_api_requests, increment_errors
 
 logger = get_logger(__name__)
 
@@ -35,3 +38,25 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(auth.router)
+
+
+@app.middleware("http")
+async def count_requests(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """Counts every request in Phase 10's live ``stats:today:api_requests`` Redis counter."""
+    await increment_api_requests()
+    return await call_next(request)
+
+
+@app.exception_handler(Exception)
+async def handle_unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
+    """Catch-all so an unhandled exception still counts in today's live ``errors`` stat.
+
+    FastAPI's default behavior for an uncaught exception is a bare-bones
+    500 with no logging or stats visibility; this keeps that same 500
+    response but adds both.
+    """
+    logger.exception("api_unhandled_error", path=request.url.path, error=str(exc))
+    await increment_errors()
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})

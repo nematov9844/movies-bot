@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, literal_column, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
@@ -47,12 +47,20 @@ class UserRepository(BaseRepository[User]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def upsert(self, id: int, **fields: Any) -> User:
+    async def upsert(self, id: int, **fields: Any) -> tuple[User, bool]:
         """Insert a user, or update the given fields if it already exists.
 
         Used on every bot update to keep telegram-sourced fields (username,
         first/last name, last_seen_at, ...) in sync without a read-then-write
         round trip.
+
+        Returns ``(user, is_new)``. ``is_new`` is read off Postgres's
+        ``xmax`` system column, which is ``0`` only for a row inserted by
+        the current command and non-zero once ``ON CONFLICT DO UPDATE``
+        touches an existing row — the standard trick for telling an insert
+        from an update apart within a single upsert statement, without a
+        separate existence check. Phase 10's stats counters use it to tell
+        new signups from returning users.
         """
         stmt = (
             pg_insert(User)
@@ -61,7 +69,8 @@ class UserRepository(BaseRepository[User]):
                 index_elements=[User.id],
                 set_={**fields, "updated_at": func.now()},
             )
-            .returning(User)
+            .returning(User, literal_column("(xmax = 0)").label("is_new"))
         )
         result = await self.session.execute(stmt)
-        return result.scalar_one()
+        user, is_new = result.one()
+        return user, bool(is_new)

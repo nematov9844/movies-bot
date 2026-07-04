@@ -10,6 +10,7 @@ from app.database.repositories.movie_view_repository import MovieViewRepository
 from app.database.repositories.referral_repository import ReferralRepository
 from app.database.repositories.user_repository import UserRepository
 from app.services.premium.premium_service import PremiumService
+from app.services.stats.stats_service import increment_new_user, mark_active_user
 
 
 @dataclass(slots=True)
@@ -43,14 +44,25 @@ class UserService:
         self._referral_repo = ReferralRepository(session)
 
     async def upsert_from_telegram(self, tg_user: TelegramUser) -> User:
-        """Insert-or-refresh a user row from an incoming Telegram user object."""
-        return await self._repo.upsert(
+        """Insert-or-refresh a user row from an incoming Telegram user object.
+
+        Also feeds Phase 10's live stats counters: a fresh insert bumps
+        ``stats:today:new_users``, and every call (new or returning user)
+        marks the user active for today's distinct-active-users set —
+        this runs on every single bot update, so it's the one place that
+        can observe both without extra queries.
+        """
+        user, is_new = await self._repo.upsert(
             tg_user.id,
             username=tg_user.username,
             first_name=tg_user.first_name,
             last_name=tg_user.last_name,
             last_seen_at=datetime.now(UTC),
         )
+        if is_new:
+            await increment_new_user()
+        await mark_active_user(user.id)
+        return user
 
     async def get_language(self, user_id: int) -> str:
         """The stored UI language for ``user_id``, defaulting to ``DEFAULT_LANGUAGE``.

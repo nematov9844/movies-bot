@@ -16,5 +16,6 @@ def admin_panel_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="📢 Kanallar", callback_data="channel_menu")],
             [InlineKeyboardButton(text="⭐ Premium", callback_data="premium_menu")],
             [InlineKeyboardButton(text="📣 Broadcast", callback_data="broadcast_menu")],
+            [InlineKeyboardButton(text="📊 Statistika", callback_data="stats_menu")],
         ]
     )

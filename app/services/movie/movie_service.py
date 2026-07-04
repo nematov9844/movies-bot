@@ -21,6 +21,7 @@ from app.database.repositories.category_repository import CategoryRepository
 from app.database.repositories.movie_repository import MovieRepository
 from app.database.repositories.movie_view_repository import MovieViewRepository
 from app.services.premium.premium_service import PremiumService
+from app.services.stats.stats_service import increment_movies_sent
 
 # Sentinel distinguishing "leave this field alone" from "set it to None" in
 # ``MovieService.update_movie`` — plain ``None`` can't be used as that
@@ -191,12 +192,13 @@ class MovieService:
         return await self._premium_service.is_premium(user_id)
 
     async def record_view(self, movie_id: int, user_id: int) -> None:
-        """Insert a ``movie_views`` row and bump ``Movie.view_count`` in one flush."""
+        """Insert a ``movie_views`` row, bump ``Movie.view_count``, and count it in today's live stats."""
         self._session.add(MovieView(movie_id=movie_id, user_id=user_id))
         movie = await self._repo.get(movie_id)
         if movie is not None:
             movie.view_count += 1
         await self._session.flush()
+        await increment_movies_sent()
 
     async def search(self, query: str, page: int, size: int) -> tuple[list[Movie], int]:
         """Title ``ILIKE`` search over active movies, paginated."""
