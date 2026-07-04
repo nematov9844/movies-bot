@@ -16,6 +16,7 @@ node_modules/
 admin-panel/.next/
 admin-panel/out/
 admin-panel/.env*.local
+admin-panel/tsconfig.tsbuildinfo
 .DS_Store
 *.sqlite3
 dist/

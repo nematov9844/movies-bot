@@ -34,12 +34,24 @@ class Settings(BaseSettings):
     jwt_secret: str = Field(...)
     jwt_access_expire_minutes: int = 30
     jwt_refresh_expire_days: int = 7
+    # Comma-separated browser origins allowed to call the API cross-origin —
+    # the web admin panel lives on its own subdomain (per Phase 18's nginx
+    # config, e.g. panel.domain.uz calling api.domain.uz), so this can't
+    # just be "debug ? * : []"; production needs its real origin(s) listed
+    # here explicitly. Empty in dev is fine since `debug=True` already
+    # allows "*" regardless of this value.
+    cors_origins: str = ""
 
     # General
     debug: bool = False
     environment: str = "production"
     sentry_dsn: str | None = None
     timezone: str = "Asia/Tashkent"
+
+    @computed_field
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @computed_field
     @property
