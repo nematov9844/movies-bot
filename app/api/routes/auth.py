@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from app.api.dependencies.auth import CurrentAdmin
 from app.api.dependencies.db import DbSession
+from app.api.rate_limit import limiter
 from app.api.schemas.auth import LoginRequest, MeResponse, RefreshRequest, TokenResponse
 from app.core import security
 from app.services.admin.admin_service import AdminService
@@ -30,6 +31,7 @@ _REFRESH_ERROR = HTTPException(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def login(body: LoginRequest, request: Request, session: DbSession) -> TokenResponse:
     admin_service = AdminService(session)
     audit_service = AuditService(session)

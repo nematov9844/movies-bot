@@ -90,6 +90,15 @@ SETTINGS: list[dict[str, str]] = [
         "type": SettingType.STR.value,
         "description": "Kino kodi bo'yicha hech narsa topilmaganda ko'rsatiladigan matn",
     },
+    {
+        "key": "admin_ip_whitelist",
+        "value": "",
+        "type": SettingType.STR.value,
+        "description": (
+            "Admin API'ga ruxsat etilgan IP manzillar, vergul bilan ajratilgan "
+            "(bo'sh bo'lsa tekshiruv o'chirilgan)"
+        ),
+    },
 ]
 
 

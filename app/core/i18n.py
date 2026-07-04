@@ -9,6 +9,7 @@ language code) falls back to ``uz`` rather than raising, since a translation
 gap must never break the bot for a user.
 """
 
+import html
 from typing import Any
 
 from app.core.constants import DEFAULT_LANGUAGE
@@ -75,7 +76,15 @@ def t(key: str, lang: str = DEFAULT_LANGUAGE, **kwargs: Any) -> str:
     if template is None:
         return key
 
+    # Every template is parsed as Telegram HTML (bot-wide parse_mode=HTML) —
+    # kwargs here (first_name, referral links, ...) can carry raw
+    # user-controlled text, so they're escaped before formatting rather than
+    # trusting every call site to remember to. Templates supply their own
+    # literal <b>/<code> tags directly in TRANSLATIONS, never via a kwarg,
+    # so this can't break intentional formatting.
+    safe_kwargs = {k: html.escape(v) if isinstance(v, str) else v for k, v in kwargs.items()}
+
     try:
-        return template.format(**kwargs)
+        return template.format(**safe_kwargs)
     except (KeyError, IndexError):
         return template

@@ -6,6 +6,7 @@ ForceSubscribeMiddleware will check that flag to decide whether to enforce
 the force-subscribe gate before running the handler.
 """
 
+import html
 import math
 from collections.abc import Sequence
 
@@ -62,7 +63,9 @@ async def open_browse_menu(message: Message, state: FSMContext) -> None:
 async def _build_search_page(session: AsyncSession, query: str, page: int) -> tuple[str, InlineKeyboardMarkup]:
     movies, total = await MovieService(session).search(query, page, SEARCH_PAGE_SIZE)
     total_pages = max(1, math.ceil(total / SEARCH_PAGE_SIZE))
-    header = f'🔎 "{query}" bo\'yicha natijalar ({page}/{total_pages}):'
+    # `query` is raw user-typed text echoed back under HTML parse_mode —
+    # escaped so it can't break entity parsing or spoof formatting.
+    header = f'🔎 "{html.escape(query)}" bo\'yicha natijalar ({page}/{total_pages}):'
     body = _movie_rows_text(movies) if movies else NO_RESULTS_TEXT
     keyboard = movie_list_keyboard(
         movies,

@@ -9,6 +9,8 @@ admin (e.g. they blocked the bot) is caught and logged rather than allowed
 to break the user-facing reply or skip notifying the rest.
 """
 
+import html
+
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, Message
@@ -33,9 +35,11 @@ _CALLBACK_PREFIX = "premium:choose:"
 
 
 def _display_name(user: TgUser) -> str:
+    """Renders the purchasing user's name for an admin DM (HTML parse mode) — escaped, since
+    first/last name and username are all user-controlled Telegram profile fields."""
     name_parts = [part for part in (user.first_name, user.last_name) if part]
     full_name = " ".join(name_parts) if name_parts else (user.username or str(user.id))
-    return f"{full_name} (ID: {user.id})"
+    return f"{html.escape(full_name)} (ID: {user.id})"
 
 
 def _purchase_intent_text(plan_name: str, support_username: str) -> str:
