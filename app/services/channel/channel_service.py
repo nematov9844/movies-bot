@@ -8,7 +8,7 @@ callback-data addresses — ``ForceSubscribeService`` is the one that works in
 terms of the Telegram ``channel_id``.
 """
 
-from datetime import datetime, time
+from datetime import UTC, datetime, time
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -110,3 +110,27 @@ class ChannelService:
         toggle (``toggle_active``) is the reversible lever, this is for
         actually removing a misconfigured/no-longer-needed entry."""
         return await self._repo.delete(id)
+
+    async def deactivate_expired_and_over_limit(self) -> list[Channel]:
+        """Flip ``is_active`` off for channels whose ``expire_date`` has passed or whose ``join_limit`` is full.
+
+        Extension point for Phase 11's 5-minute scheduler job. Non-destructive,
+        like every other state change here — an admin can push out
+        ``expire_date`` or raise ``join_limit`` and toggle the channel back on
+        with ``toggle_active``, so this never touches ``delete_channel``'s
+        actual-removal path.
+        """
+        now = datetime.now(UTC)
+        flipped = []
+        for channel in await self._repo.get_many():
+            if not channel.is_active:
+                continue
+            expired = channel.expire_date is not None and channel.expire_date <= now
+            over_limit = channel.join_limit is not None and channel.current_joins >= channel.join_limit
+            if expired or over_limit:
+                channel.is_active = False
+                flipped.append(channel)
+
+        if flipped:
+            await self._session.flush()
+        return flipped

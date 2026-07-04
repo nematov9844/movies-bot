@@ -17,6 +17,7 @@ from app.bot.routers import main_router
 from app.core.config import settings
 from app.core.logger import get_logger, setup_logging
 from app.database.session import async_session_factory
+from app.scheduler import create_scheduler
 from app.services.admin.admin_service import AdminService
 from app.services.stats.stats_service import increment_errors
 
@@ -78,9 +79,18 @@ async def main() -> None:
     dp.include_router(main_router)
     dp.errors.register(_handle_error)
 
+    # Phase 11: runs in this same process (per the TZ) rather than as a
+    # separate service, so the premium-expiry job can reuse this one `bot`
+    # to DM users.
+    scheduler = create_scheduler(bot)
+    scheduler.start()
+
     logger.info("bot_starting", environment=settings.environment)
     await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        scheduler.shutdown(wait=False)
 
 
 if __name__ == "__main__":

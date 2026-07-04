@@ -67,3 +67,8 @@ PENDING_UPDATE_TTL_SECONDS = 600
 STATS_TOP_LIMIT = 10
 STATS_WEEK_DAYS = 7
 STATS_MONTH_DAYS = 30
+
+# Scheduler module (Phase 11)
+REDIS_KEY_PREMIUM_WARNED = "premium:warned:{premium_user_id}"
+PREMIUM_WARNING_HOURS = 24
+PREMIUM_WARNED_TTL_SECONDS = 93600  # 26h — covers the warning window with headroom
