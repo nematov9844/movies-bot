@@ -32,6 +32,7 @@ from app.database.models import Statistics
 from app.database.redis_client import get_redis
 from app.database.repositories.movie_repository import MovieRepository
 from app.database.repositories.movie_view_repository import MovieViewRepository
+from app.database.repositories.premium_user_repository import PremiumUserRepository
 from app.database.repositories.statistics_repository import StatisticsRepository
 from app.database.repositories.user_repository import UserRepository
 
@@ -87,6 +88,30 @@ class PeriodStats:
     top_users: list[UserRank]
 
 
+@dataclass(slots=True)
+class DailyStat:
+    day: date
+    new_users: int
+    active_users: int
+    movies_sent: int
+
+
+@dataclass(slots=True)
+class DashboardData:
+    """Web panel Dashboard page (Phase 13): summary cards + a chart series.
+
+    Deliberately a plain dataclass, not the API's Pydantic response model —
+    services stay presentation-agnostic; ``app/api/routes/stats.py`` maps
+    this onto ``DashboardResponse``.
+    """
+
+    total_users: int
+    new_users_today: int
+    total_movies: int
+    active_premium_count: int
+    daily: list[DailyStat]
+
+
 async def _read_counters(redis: Redis) -> tuple[int, int, int, int]:
     new_users = int(await redis.get(_KEY_NEW_USERS) or 0)
     movies_sent = int(await redis.get(_KEY_MOVIES_SENT) or 0)
@@ -102,6 +127,7 @@ class StatsService:
         self._movie_repo = MovieRepository(session)
         self._view_repo = MovieViewRepository(session)
         self._user_repo = UserRepository(session)
+        self._premium_user_repo = PremiumUserRepository(session)
 
     async def _ranked_movies(self, since: datetime) -> list[MovieRank]:
         pairs = await self._view_repo.top_movies_since(since, STATS_TOP_LIMIT)
@@ -152,6 +178,37 @@ class StatsService:
 
     async def get_month(self) -> PeriodStats:
         return await self.get_period(STATS_MONTH_DAYS)
+
+    async def get_dashboard(self, days: int = STATS_MONTH_DAYS) -> DashboardData:
+        """Web panel Dashboard page: summary cards + a ``days``-long daily chart series.
+
+        The chart series comes from the flushed ``statistics`` table (so it
+        never includes today's not-yet-flushed row); ``new_users_today``
+        is the one live Redis figure mixed in, same as ``get_today``.
+        """
+        total_users = await self._user_repo.count()
+        total_movies = await self._movie_repo.count(is_active=True)
+        active_premium_count = await self._premium_user_repo.count(is_active=True)
+        new_users_today, _, _, _ = await _read_counters(get_redis())
+
+        rows = await self._repo.list_since(date.today() - timedelta(days=days))
+        daily = [
+            DailyStat(
+                day=row.date,
+                new_users=row.new_users,
+                active_users=row.active_users,
+                movies_sent=row.movies_sent,
+            )
+            for row in rows
+        ]
+
+        return DashboardData(
+            total_users=total_users,
+            new_users_today=new_users_today,
+            total_movies=total_movies,
+            active_premium_count=active_premium_count,
+            daily=daily,
+        )
 
     async def flush_today(self, for_date: date) -> Statistics:
         """Persist today's live Redis counters into the ``statistics`` row for ``for_date``, then reset them.

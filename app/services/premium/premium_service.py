@@ -67,8 +67,41 @@ class PremiumService:
     async def list_active_plans(self) -> list[PremiumPlan]:
         return await self._plan_repo.get_many(is_active=True)
 
+    async def list_all_plans(self) -> list[PremiumPlan]:
+        """Every plan, active or not — the web panel's plan-management table."""
+        return await self._plan_repo.get_many()
+
     async def get_plan(self, plan_id: int) -> PremiumPlan | None:
         return await self._plan_repo.get(plan_id)
+
+    async def create_plan(self, *, name: str, days: int, price: int) -> PremiumPlan:
+        return await self._plan_repo.create(name=name, days=days, price=price, is_active=True)
+
+    async def update_plan(
+        self,
+        plan_id: int,
+        *,
+        name: str | None = None,
+        days: int | None = None,
+        price: int | None = None,
+        is_active: bool | None = None,
+    ) -> PremiumPlan | None:
+        fields = {
+            k: v
+            for k, v in {"name": name, "days": days, "price": price, "is_active": is_active}.items()
+            if v is not None
+        }
+        if not fields:
+            return await self._plan_repo.get(plan_id)
+        return await self._plan_repo.update(plan_id, **fields)
+
+    async def deactivate_plan(self, plan_id: int) -> PremiumPlan | None:
+        """Soft-delete: existing grants FK to ``plan_id``, so a plan is turned off, never hard-deleted."""
+        return await self._plan_repo.update(plan_id, is_active=False)
+
+    async def list_active_subscriptions(self, limit: int, offset: int) -> tuple[list[PremiumUser], int]:
+        """Active subscriptions for the web panel's Premium page, with ``user``/``plan`` eager-loaded."""
+        return await self._user_repo.list_active(limit, offset)
 
     async def _invalidate_cache(self, user_id: int) -> None:
         await get_redis().delete(REDIS_KEY_PREMIUM.format(user_id=user_id))

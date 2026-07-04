@@ -97,6 +97,10 @@ class MovieService:
         )
         return movie
 
+    async def get(self, movie_id: int) -> Movie | None:
+        """Raw row lookup by primary key — the web panel's movie detail/edit form."""
+        return await self._repo.get(movie_id)
+
     async def update_movie(
         self,
         movie_id: int,
@@ -142,6 +146,12 @@ class MovieService:
             movie.categories = await self._category_repo.get_by_ids(category_ids or [])
 
         await self._session.flush()
+        # `updated_at`'s `onupdate=func.now()` marks it expired after this
+        # UPDATE — an unawaited attribute access on it outside a greenlet
+        # context (e.g. Pydantic serializing the returned row) would raise
+        # MissingGreenlet. Refreshing now, still inside an awaited context,
+        # means every caller gets a fully-populated row back safely.
+        await self._session.refresh(movie)
 
         redis = get_redis()
         await redis.delete(REDIS_KEY_MOVIE_CODE.format(code=old_code))

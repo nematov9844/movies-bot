@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import REDIS_KEY_SETTING
+from app.database.models import Setting
 from app.database.redis_client import get_redis
 from app.database.repositories.setting_repository import SettingRepository
 
@@ -52,3 +53,15 @@ class SettingsService:
     async def set(self, key: str, value: str) -> None:
         await self._repo.set_value(key, value)
         await get_redis().delete(REDIS_KEY_SETTING.format(key=key))
+
+    async def get_setting(self, key: str) -> Setting | None:
+        """The full DB row (type/description/updated_at included) — the web panel's Settings page.
+
+        Bypasses the cache-aside ``get``, which only ever returns the bare
+        value string; freshness matters more than caching for an admin
+        actively looking at this page.
+        """
+        return await self._repo.get_by_key(key)
+
+    async def list_all(self) -> list[Setting]:
+        return await self._repo.get_many()

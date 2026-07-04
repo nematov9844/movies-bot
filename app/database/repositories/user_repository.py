@@ -1,10 +1,9 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import exists, literal_column, select
+from sqlalchemy import exists, func, literal_column, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import func
 
 from app.database.models import PremiumUser, User
 from app.database.repositories.base import BaseRepository
@@ -46,6 +45,40 @@ class UserRepository(BaseRepository[User]):
 
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def search(self, query: str | None, limit: int, offset: int) -> tuple[list[User], int]:
+        """Admin-panel Users page search: by exact numeric ``id`` or ``username`` substring.
+
+        ``query=None`` (or blank) lists every user, most-recently-seen
+        first. A numeric query matches the Telegram ``id`` exactly (it's
+        the primary key, not worth a substring scan); anything else does an
+        ``ILIKE`` substring match against ``username``.
+        """
+        filters = ()
+        if query:
+            query = query.strip()
+            try:
+                # int(), not str.isdigit() — Telegram ids are always
+                # positive, but isdigit() rejects a leading "-" and would
+                # silently misroute any negative-id lookup to the
+                # username-substring branch instead of erroring or matching.
+                user_id = int(query)
+            except ValueError:
+                filters = (User.username.ilike(f"%{query}%"),)
+            else:
+                filters = (User.id == user_id,)
+
+        total = await self.session.scalar(select(func.count()).select_from(User).where(*filters))
+
+        stmt = (
+            select(User)
+            .where(*filters)
+            .order_by(User.last_seen_at.desc().nulls_last())
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all()), total or 0
 
     async def upsert(self, id: int, **fields: Any) -> tuple[User, bool]:
         """Insert a user, or update the given fields if it already exists.

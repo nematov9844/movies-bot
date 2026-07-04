@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import BIGINT, Boolean, DateTime, ForeignKey, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base, TimestampMixin
 
@@ -31,3 +31,6 @@ class PremiumUser(Base, TimestampMixin):
     granted_by: Mapped[int | None] = mapped_column(
         BIGINT, ForeignKey("admins.id", ondelete="SET NULL"), nullable=True
     )
+
+    user: Mapped["User"] = relationship(foreign_keys=[user_id])  # noqa: F821
+    plan: Mapped[PremiumPlan] = relationship(foreign_keys=[plan_id])

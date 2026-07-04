@@ -64,6 +64,17 @@ class UserService:
         await mark_active_user(user.id)
         return user
 
+    async def get(self, user_id: int) -> User | None:
+        return await self._repo.get(user_id)
+
+    async def search(self, query: str | None, limit: int, offset: int) -> tuple[list[User], int]:
+        """Web panel Users page search (by numeric id or username substring)."""
+        return await self._repo.search(query, limit, offset)
+
+    async def set_blocked(self, user_id: int, blocked: bool) -> User | None:
+        """Web panel Users page ban/unban — flips ``is_blocked``, the same column the bot itself checks."""
+        return await self._repo.update(user_id, is_blocked=blocked)
+
     async def get_language(self, user_id: int) -> str:
         """The stored UI language for ``user_id``, defaulting to ``DEFAULT_LANGUAGE``.
 

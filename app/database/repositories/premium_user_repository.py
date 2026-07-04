@@ -1,7 +1,8 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database.models import PremiumUser
 from app.database.repositories.base import BaseRepository
@@ -42,3 +43,23 @@ class PremiumUserRepository(BaseRepository[PremiumUser]):
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_active(self, limit: int, offset: int) -> tuple[list[PremiumUser], int]:
+        """Active subscriptions for the web panel's Premium page, soonest-expiring first.
+
+        Eager-loads ``user``/``plan`` (``selectinload``) so the API layer
+        can render usernames/plan names without an N+1 lookup per row.
+        """
+        filters = (PremiumUser.is_active.is_(True),)
+        total = await self.session.scalar(select(func.count()).select_from(PremiumUser).where(*filters))
+
+        stmt = (
+            select(PremiumUser)
+            .where(*filters)
+            .options(selectinload(PremiumUser.user), selectinload(PremiumUser.plan))
+            .order_by(PremiumUser.expires_at.asc())
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all()), total or 0

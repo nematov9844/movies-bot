@@ -41,6 +41,13 @@ class BroadcastService:
         self._repo = BroadcastRepository(session)
         self._user_repo = UserRepository(session)
 
+    async def list_recent(self, limit: int, offset: int) -> tuple[list[Broadcast], int]:
+        """Broadcast history for the web panel's Broadcast page, most recent first."""
+        return await self._repo.list_recent(limit, offset)
+
+    async def get(self, id: int) -> Broadcast | None:
+        return await self._repo.get(id)
+
     async def create(
         self,
         admin_id: int,

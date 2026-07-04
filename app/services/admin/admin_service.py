@@ -46,6 +46,42 @@ class AdminService:
         """
         return await self._repo.get_many(is_active=True)
 
+    async def list_all(self) -> list[Admin]:
+        """Every admin row (active or not) — the web panel's Admins page."""
+        return await self._repo.get_many()
+
+    async def get(self, id: int) -> Admin | None:
+        return await self._repo.get(id)
+
+    async def create(self, user_id: int, role: AdminRole, password: str) -> Admin:
+        """Web panel Admins page "qo'shish": owner-only, per the TZ role table.
+
+        Ensures ``user_id`` has a placeholder ``users`` row first (same
+        ``ON CONFLICT DO NOTHING`` idempotent insert ``ensure_owner_seeded``
+        uses) since ``admins.user_id`` FKs to it and the target admin may
+        never have pressed /start.
+        """
+        user_stmt = pg_insert(User).values(id=user_id).on_conflict_do_nothing(index_elements=[User.id])
+        await self._session.execute(user_stmt)
+
+        return await self._repo.create(
+            user_id=user_id,
+            role=role.value,
+            password_hash=security.hash_password(password),
+            is_active=True,
+        )
+
+    async def delete(self, id: int) -> bool:
+        """Web panel Admins page "o'chirish": a real row delete, not a soft-disable.
+
+        The caller (the API route) is responsible for the two safety
+        checks that don't belong in this generic service method — refusing
+        to delete the ``owner`` role and refusing to let an admin delete
+        their own row — since both need the *acting* admin's identity,
+        which this method doesn't take.
+        """
+        return await self._repo.delete(id)
+
     async def get_role(self, user_id: int) -> AdminRole | None:
         """The active admin's role for ``user_id``, or ``None`` if not an active admin."""
         admin = await self._repo.get_by_user_id(user_id)

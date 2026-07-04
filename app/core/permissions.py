@@ -19,6 +19,7 @@ class Permission(StrEnum):
     MANAGE_CHANNELS = "manage_channels"
     GRANT_PREMIUM = "grant_premium"
     VIEW_STATS = "view_stats"
+    MANAGE_USERS = "manage_users"
 
 
 PERMISSION_MIN_ROLE: dict[Permission, AdminRole] = {
@@ -29,6 +30,10 @@ PERMISSION_MIN_ROLE: dict[Permission, AdminRole] = {
     Permission.MANAGE_CHANNELS: AdminRole.ADMIN,
     Permission.GRANT_PREMIUM: AdminRole.ADMIN,
     Permission.VIEW_STATS: AdminRole.MODERATOR,
+    # Not in the TZ's role table (which never covers user moderation) —
+    # added for the web panel's Users page ban/unban action, at the same
+    # moderator+ threshold as MANAGE_MOVIES, the nearest analogous rule.
+    Permission.MANAGE_USERS: AdminRole.MODERATOR,
 }
 
 

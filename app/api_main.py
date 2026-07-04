@@ -5,7 +5,19 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import auth, health
+from app.api.routes import (
+    admins,
+    audit_logs,
+    auth,
+    broadcasts,
+    channels,
+    health,
+    movies,
+    premium,
+    stats,
+    users,
+)
+from app.api.routes import settings as settings_routes
 from app.core.config import settings
 from app.core.logger import get_logger, setup_logging
 from app.database.session import async_session_factory
@@ -38,6 +50,15 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(movies.router)
+app.include_router(users.router)
+app.include_router(channels.router)
+app.include_router(premium.router)
+app.include_router(broadcasts.router)
+app.include_router(settings_routes.router)
+app.include_router(stats.router)
+app.include_router(audit_logs.router)
+app.include_router(admins.router)
 
 
 @app.middleware("http")

@@ -62,3 +62,9 @@ class StatisticsRepository(BaseRepository[Statistics]):
             "errors": errors,
             "api_requests": api_requests,
         }
+
+    async def list_since(self, since: date) -> list[Statistics]:
+        """Every flushed day from ``since`` (inclusive) to today, oldest first — the dashboard's chart series."""
+        stmt = select(Statistics).where(Statistics.date >= since).order_by(Statistics.date.asc())
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
