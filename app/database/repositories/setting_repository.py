@@ -26,4 +26,10 @@ class SettingRepository(BaseRepository[Setting]):
         else:
             setting.value = value
         await self.session.flush()
+        # `updated_at`'s `onupdate=func.now()` marks it expired after this
+        # flush (same MissingGreenlet trap as MovieService.update_movie) —
+        # refreshed now, still inside an awaited context, so callers can
+        # safely serialize the returned row without a second query of
+        # their own.
+        await self.session.refresh(setting)
         return setting

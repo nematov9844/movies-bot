@@ -57,6 +57,14 @@ class BaseRepository[ModelT: Base]:
         for field, value in fields.items():
             setattr(obj, field, value)
         await self.session.flush()
+        # Every model's `updated_at` (TimestampMixin, or Setting's own
+        # column) has `onupdate=func.now()`, which this flush just
+        # triggered — that marks the attribute expired, and an unawaited
+        # access on it afterward (e.g. a route serializing the returned
+        # row) raises MissingGreenlet. Refreshing here, still inside an
+        # awaited context, means every caller gets a fully-populated row
+        # back safely without needing to know this detail itself.
+        await self.session.refresh(obj)
         return obj
 
     async def delete(self, id: Any) -> bool:

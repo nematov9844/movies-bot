@@ -36,9 +36,26 @@ Prometheus: http://localhost:9090
 
 ## Testlar
 
+Testlar `docker compose`'dagi Postgres/Redis'ga, lekin ilovaning haqiqiy
+bazasidan mutlaqo alohida `movie_platform_test` bazasiga ishlaydi — har bir
+test o'z tranzaksiyasida ishlaydi va oxirida (test kodning o'zi
+`session.commit()` chaqirgan bo'lsa ham) rollback qilinadi, shuning uchun
+testlar hech qachon haqiqiy ma'lumotlarga ta'sir qilmaydi.
+
 ```bash
 pip install -e ".[dev]"
-pytest
+
+# Bir martalik: test bazasini yaratish (jadvallarni conftest.py o'zi quradi)
+PGPASSWORD=<parol> psql -h localhost -U movie -d postgres -c "CREATE DATABASE movie_platform_test;"
+
+# docker-compose tashqarisidan (hostdan) ishga tushirish uchun POSTGRES_HOST/
+# REDIS_HOST'ni localhost'ga almashtiring — .env dagi "postgres"/"redis"
+# faqat compose tarmog'i ichida ishlaydi:
+POSTGRES_HOST=localhost REDIS_HOST=localhost pytest
+
+# Yoki konteyner ichidan (docker-compose'dagi nomlar to'g'ridan-to'g'ri ishlaydi):
+docker compose exec api pytest
+
 ruff check .
 ```
 
