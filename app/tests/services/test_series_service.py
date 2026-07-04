@@ -15,6 +15,21 @@ async def test_create_and_search_series(session: AsyncSession) -> None:
     assert results[0].title == "Naruto"
 
 
+async def test_create_series_stores_poster_file_id(session: AsyncSession) -> None:
+    service = SeriesService(session)
+    series = await service.create_series("Naruto", "Anime", poster_file_id="poster-abc")
+    assert series.poster_file_id == "poster-abc"
+
+
+async def test_update_series_changes_poster_file_id(session: AsyncSession) -> None:
+    service = SeriesService(session)
+    series = await service.create_series("Naruto")
+
+    updated = await service.update_series(series.id, poster_file_id="new-poster")
+    assert updated is not None
+    assert updated.poster_file_id == "new-poster"
+
+
 async def test_season_number_uniqueness(session: AsyncSession) -> None:
     service = SeriesService(session)
     series = await service.create_series("Naruto")

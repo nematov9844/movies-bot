@@ -12,6 +12,7 @@ class Movie(Base, TimestampMixin):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     file_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    poster_file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     file_unique_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     storage_message_id: Mapped[int | None] = mapped_column(BIGINT, nullable=True)
     duration: Mapped[int | None] = mapped_column(Integer, nullable=True)

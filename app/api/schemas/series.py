@@ -17,6 +17,7 @@ class SeriesResponse(BaseModel):
     id: int
     title: str
     description: str | None
+    poster_file_id: str | None
     is_active: bool
 
 
@@ -27,11 +28,13 @@ class SeriesWithSeasonsResponse(SeriesResponse):
 class SeriesCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = None
+    poster_file_id: str | None = None
 
 
 class SeriesUpdateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
+    poster_file_id: str | None = None
 
 
 class SeasonCreateRequest(BaseModel):

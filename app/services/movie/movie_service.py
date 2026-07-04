@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import MOVIE_CODE_CACHE_TTL_SECONDS, REDIS_KEY_MOVIE_CODE
@@ -48,6 +48,10 @@ class MovieCard:
     file_id: str
     is_premium: bool
     is_active: bool
+    # Defaulted so a pre-existing cached JSON blob (written before this field
+    # existed, still live for up to its 1h TTL) deserializes fine instead of
+    # raising a TypeError for a missing kwarg.
+    poster_file_id: str | None = None
 
 
 class MovieService:
@@ -75,6 +79,7 @@ class MovieService:
         is_premium: bool,
         created_by: int | None,
         category_ids: list[int] | None = None,
+        poster_file_id: str | None = None,
     ) -> Movie:
         # Resolve categories *before* creating the row: assigning to
         # ``movie.categories`` after the fact (once the row is persistent)
@@ -88,6 +93,7 @@ class MovieService:
             title=title,
             description=description,
             file_id=file_id,
+            poster_file_id=poster_file_id,
             file_unique_id=file_unique_id,
             storage_message_id=storage_message_id,
             duration=duration,
@@ -109,6 +115,7 @@ class MovieService:
         code: str | None = _UNSET,
         title: str | None = _UNSET,
         description: str | None = _UNSET,
+        poster_file_id: str | None = _UNSET,
         is_premium: bool | None = _UNSET,
         is_active: bool | None = _UNSET,
         category_ids: list[int] | None = _UNSET,
@@ -132,6 +139,8 @@ class MovieService:
             movie.title = title
         if description is not _UNSET:
             movie.description = description
+        if poster_file_id is not _UNSET:
+            movie.poster_file_id = poster_file_id
         if is_premium is not _UNSET:
             movie.is_premium = is_premium
         if is_active is not _UNSET:
@@ -194,6 +203,7 @@ class MovieService:
             file_id=movie.file_id,
             is_premium=movie.is_premium,
             is_active=movie.is_active,
+            poster_file_id=movie.poster_file_id,
         )
         await redis.set(key, json.dumps(asdict(card)), ex=MOVIE_CODE_CACHE_TTL_SECONDS)
         return card
@@ -227,7 +237,7 @@ class MovieService:
     async def search(
         self, query: str, page: int, size: int, *, standalone_only: bool = False
     ) -> tuple[list[Movie], int]:
-        """Title ``ILIKE`` search over active movies, paginated.
+        """Title-or-code ``ILIKE`` search over active movies, paginated.
 
         ``standalone_only`` excludes series episodes (``season_id IS NOT
         NULL``) — used by the user-facing browse search, which shows a
@@ -235,7 +245,10 @@ class MovieService:
         ``movie_search.py``). The admin panel's Movies page keeps the
         default (``False``): admins manage every row, episodes included.
         """
-        filters = [Movie.is_active.is_(True), Movie.title.ilike(f"%{query}%")]
+        filters = [
+            Movie.is_active.is_(True),
+            or_(Movie.title.ilike(f"%{query}%"), Movie.code.ilike(f"%{query}%")),
+        ]
         if standalone_only:
             filters.append(Movie.season_id.is_(None))
 

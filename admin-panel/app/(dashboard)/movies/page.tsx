@@ -21,10 +21,18 @@ interface MovieFormState {
   title: string;
   description: string;
   file_id: string;
+  poster_file_id: string;
   is_premium: boolean;
 }
 
-const EMPTY_FORM: MovieFormState = { code: "", title: "", description: "", file_id: "", is_premium: false };
+const EMPTY_FORM: MovieFormState = {
+  code: "",
+  title: "",
+  description: "",
+  file_id: "",
+  poster_file_id: "",
+  is_premium: false,
+};
 
 export default function MoviesPage() {
   const [data, setData] = useState<Page<Movie> | null>(null);
@@ -60,6 +68,7 @@ export default function MoviesPage() {
       title: movie.title,
       description: movie.description ?? "",
       file_id: movie.file_id,
+      poster_file_id: movie.poster_file_id ?? "",
       is_premium: movie.is_premium,
     });
     setDialogOpen(true);
@@ -76,6 +85,7 @@ export default function MoviesPage() {
             code: form.code,
             title: form.title,
             description: form.description || null,
+            poster_file_id: form.poster_file_id || null,
             is_premium: form.is_premium,
           }),
         });
@@ -87,6 +97,7 @@ export default function MoviesPage() {
             title: form.title,
             description: form.description || null,
             file_id: form.file_id,
+            poster_file_id: form.poster_file_id || null,
             is_premium: form.is_premium,
           }),
         });
@@ -202,6 +213,14 @@ export default function MoviesPage() {
               />
             </div>
           )}
+          <div className="space-y-1.5">
+            <Label htmlFor="poster_file_id">Poster (Telegram photo file_id, ixtiyoriy)</Label>
+            <Input
+              id="poster_file_id"
+              value={form.poster_file_id}
+              onChange={(e) => setForm({ ...form, poster_file_id: e.target.value })}
+            />
+          </div>
           <div className="flex items-center gap-2">
             <input
               id="is_premium"

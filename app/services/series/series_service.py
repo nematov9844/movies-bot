@@ -34,8 +34,12 @@ class SeriesService:
 
     # --- Series ---------------------------------------------------------
 
-    async def create_series(self, title: str, description: str | None = None) -> Series:
-        return await self._series_repo.create(title=title, description=description, is_active=True)
+    async def create_series(
+        self, title: str, description: str | None = None, poster_file_id: str | None = None
+    ) -> Series:
+        return await self._series_repo.create(
+            title=title, description=description, poster_file_id=poster_file_id, is_active=True
+        )
 
     async def search_series(self, query: str, limit: int, offset: int) -> tuple[list[Series], int]:
         return await self._series_repo.search(query, limit, offset)
@@ -53,9 +57,22 @@ class SeriesService:
         return await self._series_repo.get_with_seasons(series_id)
 
     async def update_series(
-        self, series_id: int, *, title: str | None = None, description: str | None = None
+        self,
+        series_id: int,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+        poster_file_id: str | None = None,
     ) -> Series | None:
-        fields = {k: v for k, v in {"title": title, "description": description}.items() if v is not None}
+        fields = {
+            k: v
+            for k, v in {
+                "title": title,
+                "description": description,
+                "poster_file_id": poster_file_id,
+            }.items()
+            if v is not None
+        }
         if not fields:
             return await self._series_repo.get(series_id)
         return await self._series_repo.update(series_id, **fields)
@@ -72,11 +89,20 @@ class SeriesService:
     async def get_season(self, season_id: int) -> Season | None:
         return await self._season_repo.get(season_id)
 
-    async def season_number_taken(self, series_id: int, number: int) -> bool:
-        return await self._season_repo.get_by_series_and_number(series_id, number) is not None
+    async def season_number_taken(self, series_id: int, number: int, *, exclude_season_id: int | None = None) -> bool:
+        existing = await self._season_repo.get_by_series_and_number(series_id, number)
+        return existing is not None and existing.id != exclude_season_id
+
+    async def update_season(self, season_id: int, number: int) -> Season | None:
+        return await self._season_repo.update(season_id, number=number)
 
     async def list_seasons(self, series_id: int) -> list[Season]:
         return await self._season_repo.list_by_series(series_id)
+
+    async def list_seasons_paginated(
+        self, series_id: int, limit: int, offset: int
+    ) -> tuple[list[Season], int]:
+        return await self._season_repo.list_by_series_paginated(series_id, limit, offset)
 
     async def delete_season(self, season_id: int) -> bool:
         """Hard delete — its episodes demote to standalone movies (``season_id`` FK is ON DELETE SET NULL)."""

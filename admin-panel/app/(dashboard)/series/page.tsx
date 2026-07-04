@@ -19,9 +19,10 @@ const PAGE_SIZE = 20;
 interface SeriesFormState {
   title: string;
   description: string;
+  poster_file_id: string;
 }
 
-const EMPTY_FORM: SeriesFormState = { title: "", description: "" };
+const EMPTY_FORM: SeriesFormState = { title: "", description: "", poster_file_id: "" };
 
 export default function SeriesPage() {
   const [data, setData] = useState<Page<Series> | null>(null);
@@ -52,7 +53,11 @@ export default function SeriesPage() {
 
   function openEdit(series: Series) {
     setEditing(series);
-    setForm({ title: series.title, description: series.description ?? "" });
+    setForm({
+      title: series.title,
+      description: series.description ?? "",
+      poster_file_id: series.poster_file_id ?? "",
+    });
     setDialogOpen(true);
   }
 
@@ -60,16 +65,15 @@ export default function SeriesPage() {
     e.preventDefault();
     setSaving(true);
     try {
+      const body = {
+        title: form.title,
+        description: form.description || null,
+        poster_file_id: form.poster_file_id || null,
+      };
       if (editing) {
-        await apiFetch(`/api/series/${editing.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ title: form.title, description: form.description || null }),
-        });
+        await apiFetch(`/api/series/${editing.id}`, { method: "PATCH", body: JSON.stringify(body) });
       } else {
-        await apiFetch("/api/series", {
-          method: "POST",
-          body: JSON.stringify({ title: form.title, description: form.description || null }),
-        });
+        await apiFetch("/api/series", { method: "POST", body: JSON.stringify(body) });
       }
       setDialogOpen(false);
       load();
@@ -163,6 +167,14 @@ export default function SeriesPage() {
               id="description"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="poster_file_id">Poster (Telegram photo file_id, ixtiyoriy)</Label>
+            <Input
+              id="poster_file_id"
+              value={form.poster_file_id}
+              onChange={(e) => setForm({ ...form, poster_file_id: e.target.value })}
             />
           </div>
           <Button type="submit" className="w-full" disabled={saving}>

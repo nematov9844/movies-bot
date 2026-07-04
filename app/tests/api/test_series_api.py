@@ -77,6 +77,33 @@ async def test_create_season_and_reject_duplicate_number(client: AsyncClient, ma
     assert len(with_seasons.json()["seasons"]) == 1
 
 
+async def test_update_season_number_and_reject_duplicate(client: AsyncClient, make_admin, session) -> None:
+    headers = await _auth_headers(client, make_admin, session, 930006, AdminRole.ADMIN)
+
+    series = (await client.post("/api/series", json={"title": "Attack on Titan"}, headers=headers)).json()
+    season_1 = (
+        await client.post(f"/api/series/{series['id']}/seasons", json={"number": 1}, headers=headers)
+    ).json()
+    await client.post(f"/api/series/{series['id']}/seasons", json={"number": 2}, headers=headers)
+
+    renamed = await client.patch(
+        f"/api/series/seasons/{season_1['id']}", json={"number": 5}, headers=headers
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["number"] == 5
+
+    # Renumbering to itself (no-op) must not spuriously conflict.
+    unchanged = await client.patch(
+        f"/api/series/seasons/{season_1['id']}", json={"number": 5}, headers=headers
+    )
+    assert unchanged.status_code == 200
+
+    conflict = await client.patch(
+        f"/api/series/seasons/{season_1['id']}", json={"number": 2}, headers=headers
+    )
+    assert conflict.status_code == 409
+
+
 async def test_list_episodes_and_delete_season(client: AsyncClient, make_admin, session) -> None:
     headers = await _auth_headers(client, make_admin, session, 930004, AdminRole.ADMIN)
 
@@ -117,3 +144,22 @@ async def test_missing_season_episodes_returns_404(client: AsyncClient, make_adm
     headers = await _auth_headers(client, make_admin, session, 930005, AdminRole.ADMIN)
     r = await client.get("/api/series/seasons/99999999/episodes", headers=headers)
     assert r.status_code == 404
+
+
+async def test_create_and_update_series_poster(client: AsyncClient, make_admin, session) -> None:
+    headers = await _auth_headers(client, make_admin, session, 930007, AdminRole.ADMIN)
+
+    create = await client.post(
+        "/api/series", json={"title": "Poster Series", "poster_file_id": "poster-1"}, headers=headers
+    )
+    assert create.status_code == 201
+    assert create.json()["poster_file_id"] == "poster-1"
+
+    updated = await client.patch(
+        f"/api/series/{create.json()['id']}", json={"poster_file_id": "poster-2"}, headers=headers
+    )
+    assert updated.status_code == 200
+    assert updated.json()["poster_file_id"] == "poster-2"
+
+    fetched = await client.get(f"/api/series/{create.json()['id']}", headers=headers)
+    assert fetched.json()["poster_file_id"] == "poster-2"

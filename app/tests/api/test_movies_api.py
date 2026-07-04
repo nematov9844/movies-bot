@@ -57,3 +57,21 @@ async def test_get_missing_movie_returns_404(client: AsyncClient, make_admin, se
     headers = await _auth_headers(client, make_admin, session, 920002, AdminRole.ADMIN)
     r = await client.get("/api/movies/99999999", headers=headers)
     assert r.status_code == 404
+
+
+async def test_create_and_update_movie_poster(client: AsyncClient, make_admin, session) -> None:
+    headers = await _auth_headers(client, make_admin, session, 920003, AdminRole.ADMIN)
+
+    create = await client.post(
+        "/api/movies",
+        json={"code": "api-poster-1", "title": "Poster Movie", "file_id": "f1", "poster_file_id": "poster-1"},
+        headers=headers,
+    )
+    assert create.status_code == 201
+    assert create.json()["poster_file_id"] == "poster-1"
+
+    updated = await client.patch(
+        f"/api/movies/{create.json()['id']}", json={"poster_file_id": "poster-2"}, headers=headers
+    )
+    assert updated.status_code == 200
+    assert updated.json()["poster_file_id"] == "poster-2"

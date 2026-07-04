@@ -2,14 +2,49 @@
 
 ``is_channel_enforceable`` is a pure function (no DB/Redis), so these
 don't need the ``session``/``client`` fixtures at all.
+
+The tests at the bottom of this file cover ``ForceSubscribeService.check``
+itself end-to-end (bypass rules + live membership check) — a gap found
+while investigating a real "force-subscribe isn't blocking anyone" report
+that turned out to be the premium/admin bypass working exactly as designed
+for the two accounts being tested with, not a bug. Nothing here was broken,
+but the integration behavior had no direct test before.
 """
 
 from datetime import UTC, datetime, time, timedelta
+from unittest.mock import AsyncMock
 
+import pytest
+from aiogram import Bot
+from aiogram.types import ChatMemberLeft, ChatMemberMember
+from aiogram.types import User as TgUser
+
+from app.core.constants import REDIS_KEY_FORCE_SUB, REDIS_KEY_SETTING
 from app.database.models import Channel
-from app.services.force_subscribe.force_subscribe_service import is_channel_enforceable
+from app.database.redis_client import get_redis
+from app.database.repositories.channel_repository import ChannelRepository
+from app.services.force_subscribe.force_subscribe_service import (
+    ForceSubscribeService,
+    is_channel_enforceable,
+)
+from app.services.settings.settings_service import SettingsService
 
 NOW = datetime(2026, 6, 15, 12, 0, tzinfo=UTC)
+
+# Redis isn't rolled back by the `session` fixture's SAVEPOINT the way DB
+# rows are, so the 60s-TTL "fs:{user}:{channel}" membership cache from one
+# run of these tests can still be warm on the next run within that window —
+# a real flake this suite hit. Clean up every key these tests touch.
+_TEST_USER_CHANNEL_PAIRS = [(700001, -100999001), (700002, -100999002), (700003, -100999003)]
+
+
+@pytest.fixture(autouse=True)
+async def _cleanup_force_sub_cache():
+    yield
+    redis = get_redis()
+    for user_id, channel_id in _TEST_USER_CHANNEL_PAIRS:
+        await redis.delete(REDIS_KEY_FORCE_SUB.format(user_id=user_id, channel_id=channel_id))
+    await redis.delete(REDIS_KEY_SETTING.format(key="force_subscribe_enabled"))
 
 
 def _channel(**overrides: object) -> Channel:
@@ -110,3 +145,51 @@ def test_all_conditions_pass_together() -> None:
         current_joins=5,
     )
     assert is_channel_enforceable(channel, NOW) is True
+
+
+# --- ForceSubscribeService.check end-to-end (bypass rules + live membership) ---
+
+
+def _mock_bot(member_status_cls: type) -> AsyncMock:
+    bot = AsyncMock(spec=Bot)
+    bot.get_chat_member.return_value = member_status_cls(user=TgUser(id=1, is_bot=True, first_name="x"))
+    return bot
+
+
+async def test_check_blocks_a_plain_user_not_subscribed(session) -> None:
+    await ChannelRepository(session).create(
+        channel_id=-100999001, title="Required Channel", is_active=True, is_required=True, priority=0
+    )
+    await session.flush()
+
+    bot = _mock_bot(ChatMemberLeft)
+    blocking = await ForceSubscribeService(session, bot).check(user_id=700001)
+
+    assert [c.channel_id for c in blocking] == [-100999001]
+    bot.get_chat_member.assert_awaited_once_with(-100999001, 700001)
+
+
+async def test_check_does_not_block_a_subscribed_user(session) -> None:
+    await ChannelRepository(session).create(
+        channel_id=-100999002, title="Required Channel 2", is_active=True, is_required=True, priority=0
+    )
+    await session.flush()
+
+    bot = _mock_bot(ChatMemberMember)
+    blocking = await ForceSubscribeService(session, bot).check(user_id=700002)
+
+    assert blocking == []
+
+
+async def test_check_bypassed_when_force_subscribe_disabled(session) -> None:
+    await ChannelRepository(session).create(
+        channel_id=-100999003, title="Required Channel 3", is_active=True, is_required=True, priority=0
+    )
+    await SettingsService(session).set("force_subscribe_enabled", "false")
+    await session.flush()
+
+    bot = _mock_bot(ChatMemberLeft)
+    blocking = await ForceSubscribeService(session, bot).check(user_id=700003)
+
+    assert blocking == []
+    bot.get_chat_member.assert_not_awaited()

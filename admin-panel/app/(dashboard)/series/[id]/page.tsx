@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ export default function SeriesDetailPage() {
   const [series, setSeries] = useState<SeriesWithSeasons | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingSeason, setEditingSeason] = useState<Season | null>(null);
   const [seasonNumber, setSeasonNumber] = useState("");
   const [saving, setSaving] = useState(false);
   const [expandedSeasonId, setExpandedSeasonId] = useState<number | null>(null);
@@ -35,14 +36,33 @@ export default function SeriesDetailPage() {
     load();
   }, [load]);
 
-  async function onCreateSeason(e: React.FormEvent) {
+  function openCreateSeason() {
+    setEditingSeason(null);
+    setSeasonNumber("");
+    setDialogOpen(true);
+  }
+
+  function openEditSeason(season: Season) {
+    setEditingSeason(season);
+    setSeasonNumber(String(season.number));
+    setDialogOpen(true);
+  }
+
+  async function onSaveSeason(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     try {
-      await apiFetch(`/api/series/${seriesId}/seasons`, {
-        method: "POST",
-        body: JSON.stringify({ number: Number(seasonNumber) }),
-      });
+      if (editingSeason) {
+        await apiFetch(`/api/series/seasons/${editingSeason.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ number: Number(seasonNumber) }),
+        });
+      } else {
+        await apiFetch(`/api/series/${seriesId}/seasons`, {
+          method: "POST",
+          body: JSON.stringify({ number: Number(seasonNumber) }),
+        });
+      }
       setDialogOpen(false);
       setSeasonNumber("");
       load();
@@ -73,7 +93,7 @@ export default function SeriesDetailPage() {
           <h1 className="text-2xl font-semibold">{series.title}</h1>
           {series.description && <p className="text-sm text-muted-foreground">{series.description}</p>}
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
+        <Button onClick={openCreateSeason}>
           <Plus className="h-4 w-4" /> Fasl qo&apos;shish
         </Button>
       </div>
@@ -95,6 +115,7 @@ export default function SeriesDetailPage() {
                 season={season}
                 expanded={expandedSeasonId === season.id}
                 onToggle={() => setExpandedSeasonId(expandedSeasonId === season.id ? null : season.id)}
+                onEdit={() => openEditSeason(season)}
                 onDelete={() => onDeleteSeason(season)}
               />
             ))}
@@ -109,8 +130,12 @@ export default function SeriesDetailPage() {
         </Table>
       </div>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} title="Yangi fasl">
-        <form onSubmit={onCreateSeason} className="space-y-4">
+      <Dialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        title={editingSeason ? "Faslni tahrirlash" : "Yangi fasl"}
+      >
+        <form onSubmit={onSaveSeason} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="number">Fasl raqami</Label>
             <Input
@@ -122,10 +147,12 @@ export default function SeriesDetailPage() {
               required
             />
           </div>
-          <p className="text-xs text-muted-foreground">
-            Qismlarni (video fayllarni) shu faslga qo&apos;shish uchun botda &quot;📺 Seriallar&quot; bo&apos;limidan foydalaning —
-            videolarni birma-bir forward qilasiz.
-          </p>
+          {!editingSeason && (
+            <p className="text-xs text-muted-foreground">
+              Qismlarni (video fayllarni) shu faslga qo&apos;shish uchun botda &quot;📺 Seriallar&quot; bo&apos;limidan
+              foydalaning — videolarni birma-bir forward qilasiz.
+            </p>
+          )}
           <Button type="submit" className="w-full" disabled={saving}>
             {saving ? "Saqlanmoqda..." : "Saqlash"}
           </Button>
@@ -139,11 +166,13 @@ function SeasonRow({
   season,
   expanded,
   onToggle,
+  onEdit,
   onDelete,
 }: {
   season: Season;
   expanded: boolean;
   onToggle: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -156,7 +185,10 @@ function SeasonRow({
         </TableCell>
         <TableCell className="font-medium">{season.number}-fasl</TableCell>
         <TableCell>{season.episode_count}</TableCell>
-        <TableCell className="text-right">
+        <TableCell className="flex justify-end gap-2">
+          <Button variant="ghost" size="icon" onClick={onEdit}>
+            <Pencil className="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="icon" onClick={onDelete}>
             <Trash2 className="h-4 w-4" />
           </Button>

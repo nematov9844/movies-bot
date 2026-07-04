@@ -43,6 +43,13 @@ def confirm_keyboard(confirm_callback: str, cancel_callback: str) -> InlineKeybo
     )
 
 
+def movie_detail_keyboard(code: str) -> InlineKeyboardMarkup:
+    """The one-button "🎬 Kinoni olish" card shown before actual delivery — see ``mv:detail:{code}``."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="🎬 Kinoni olish", callback_data=f"mv:deliver:{code}")]]
+    )
+
+
 def category_picker_keyboard(
     categories: Sequence[Category],
     selected_ids: set[int],

@@ -13,6 +13,7 @@ export interface Movie {
   title: string;
   description: string | null;
   file_id: string;
+  poster_file_id: string | null;
   quality: string | null;
   duration: number | null;
   file_size: number | null;
@@ -139,6 +140,7 @@ export interface Series {
   id: number;
   title: string;
   description: string | null;
+  poster_file_id: string | null;
   is_active: boolean;
 }
 

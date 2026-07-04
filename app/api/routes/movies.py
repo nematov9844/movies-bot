@@ -62,6 +62,7 @@ async def create_movie(
         title=body.title,
         description=body.description,
         file_id=body.file_id,
+        poster_file_id=body.poster_file_id,
         file_unique_id=body.file_unique_id,
         storage_message_id=body.storage_message_id,
         duration=body.duration,

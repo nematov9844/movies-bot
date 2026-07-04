@@ -11,6 +11,7 @@ class MovieResponse(BaseModel):
     title: str
     description: str | None
     file_id: str
+    poster_file_id: str | None
     quality: str | None
     duration: int | None
     file_size: int | None
@@ -27,6 +28,7 @@ class MovieCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = None
     file_id: str = Field(min_length=1)
+    poster_file_id: str | None = None
     file_unique_id: str | None = None
     storage_message_id: int | None = None
     duration: int | None = None
@@ -41,6 +43,7 @@ class MovieUpdateRequest(BaseModel):
     code: str | None = Field(default=None, min_length=1, max_length=32)
     title: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
+    poster_file_id: str | None = None
     is_premium: bool | None = None
     is_active: bool | None = None
     category_ids: list[int] | None = None

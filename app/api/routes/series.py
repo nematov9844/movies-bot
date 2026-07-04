@@ -67,7 +67,11 @@ async def get_series(series_id: int, session: DbSession, _current_admin: Current
         raise _SERIES_NOT_FOUND
     seasons = [await _season_response(service, season) for season in series.seasons]
     return SeriesWithSeasonsResponse(
-        id=series.id, title=series.title, description=series.description, is_active=series.is_active,
+        id=series.id,
+        title=series.title,
+        description=series.description,
+        poster_file_id=series.poster_file_id,
+        is_active=series.is_active,
         seasons=seasons,
     )
 
@@ -76,7 +80,7 @@ async def get_series(series_id: int, session: DbSession, _current_admin: Current
 async def create_series(
     body: SeriesCreateRequest, request: Request, session: DbSession, current_admin: ManageMoviesAdmin
 ) -> SeriesResponse:
-    series = await SeriesService(session).create_series(body.title, body.description)
+    series = await SeriesService(session).create_series(body.title, body.description, body.poster_file_id)
     await AuditService(session).log(
         admin_id=current_admin.id,
         action="series_create",
@@ -157,6 +161,34 @@ async def create_season(
     )
     await session.commit()
     return await _season_response(service, season)
+
+
+@router.patch("/seasons/{season_id}", response_model=SeasonResponse)
+async def update_season(
+    season_id: int,
+    body: SeasonCreateRequest,
+    request: Request,
+    session: DbSession,
+    current_admin: ManageMoviesAdmin,
+) -> SeasonResponse:
+    service = SeriesService(session)
+    season = await service.get_season(season_id)
+    if season is None:
+        raise _SEASON_NOT_FOUND
+    if await service.season_number_taken(season.series_id, body.number, exclude_season_id=season_id):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bu raqamli fasl allaqachon mavjud")
+
+    updated = await service.update_season(season_id, body.number)
+    await AuditService(session).log(
+        admin_id=current_admin.id,
+        action="season_update",
+        entity="season",
+        entity_id=str(season_id),
+        payload={"number": body.number},
+        ip=request.client.host if request.client else None,
+    )
+    await session.commit()
+    return await _season_response(service, updated)
 
 
 @router.delete("/seasons/{season_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -57,6 +57,17 @@ SEARCH_PAGE_SIZE = 10
 TOP_MOVIES_LIMIT = 10
 NEW_MOVIES_LIMIT = 10
 POPULAR_MOVIES_LIMIT = 10
+
+# Series/season episode picker: a compact numbered grid rather than one
+# button per row, so a season with hundreds of episodes still fits on a
+# handful of screens instead of one very tall list.
+EPISODE_PAGE_SIZE = 15
+EPISODE_GRID_COLUMNS = 5
+
+# Season picker on a series card — same grid treatment as episodes, for
+# shows with a large number of seasons.
+SEASON_PAGE_SIZE = 15
+SEASON_GRID_COLUMNS = 5
 POPULAR_MOVIES_WINDOW_DAYS = 7
 
 # Force-subscribe module (Phase 7)
