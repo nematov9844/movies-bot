@@ -8,7 +8,9 @@ handling of its own.
 """
 
 import asyncio
+import json
 from datetime import date, timedelta
+from pathlib import Path
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
@@ -24,9 +26,12 @@ from app.database.repositories.channel_repository import ChannelRepository
 from app.database.session import async_session_factory
 from app.services.channel.channel_service import ChannelService
 from app.services.premium.premium_service import PremiumService
+from app.services.settings.settings_service import SettingsService
 from app.services.stats.stats_service import StatsService
 
 logger = get_logger(__name__)
+
+BACKUP_DIR = Path("backups")
 
 
 async def deactivate_expired_channels() -> None:
@@ -154,3 +159,32 @@ async def cleanup_stale_redis_keys() -> None:
             logger.info("stale_redis_keys_cleaned", count=deleted)
     except Exception:
         logger.exception("redis_cleanup_job_failed")
+
+
+async def export_settings_json() -> None:
+    """Phase 16's weekly settings export: every ``settings`` row to ``backups/settings_<date>.json``.
+
+    A lighter, human-readable companion to the full daily ``pg_dump`` —
+    lets an admin diff/restore just the runtime configuration without
+    touching a whole-database backup.
+    """
+    try:
+        async with async_session_factory() as session:
+            rows = await SettingsService(session).list_all()
+            payload = [
+                {
+                    "key": row.key,
+                    "value": row.value,
+                    "type": row.type,
+                    "description": row.description,
+                    "updated_at": row.updated_at.isoformat(),
+                }
+                for row in rows
+            ]
+
+        BACKUP_DIR.mkdir(exist_ok=True)
+        out_file = BACKUP_DIR / f"settings_{date.today():%Y-%m-%d}.json"
+        out_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        logger.info("settings_exported", path=str(out_file), count=len(payload))
+    except Exception:
+        logger.exception("settings_export_job_failed")

@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.scheduler.jobs import (
     cleanup_stale_redis_keys,
     deactivate_expired_channels,
+    export_settings_json,
     flush_daily_statistics,
     process_premium_expiry,
     run_database_backup,
@@ -33,6 +34,10 @@ def create_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler.add_job(flush_daily_statistics, CronTrigger(hour=0, minute=5), id="stats_flush")
     scheduler.add_job(run_database_backup, CronTrigger(hour=3, minute=0), id="db_backup")
     scheduler.add_job(cleanup_stale_redis_keys, IntervalTrigger(hours=1), id="redis_cleanup")
+    # Phase 16: weekly settings JSON export, alongside the daily DB backup.
+    scheduler.add_job(
+        export_settings_json, CronTrigger(day_of_week="mon", hour=4, minute=0), id="settings_export"
+    )
 
     return scheduler
 
