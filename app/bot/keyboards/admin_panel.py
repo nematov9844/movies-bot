@@ -17,5 +17,6 @@ def admin_panel_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="⭐ Premium", callback_data="premium_menu")],
             [InlineKeyboardButton(text="📣 Broadcast", callback_data="broadcast_menu")],
             [InlineKeyboardButton(text="📊 Statistika", callback_data="stats_menu")],
+            [InlineKeyboardButton(text="⚙️ Sozlamalar", callback_data="settings_menu")],
         ]
     )

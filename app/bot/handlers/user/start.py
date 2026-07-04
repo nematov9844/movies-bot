@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.bot.keyboards.main_menu import main_menu_keyboard
 from app.core.i18n import t
 from app.core.logger import get_logger
+from app.services.settings.settings_service import SettingsService
 from app.services.user.user_service import UserService
 
 router = Router(name="start")
@@ -45,8 +46,11 @@ async def cmd_start(message: Message, command: CommandObject, session: AsyncSess
             logger.info("referral_skipped", referrer_id=referrer_id, referred_id=user.id)
 
     language = await user_service.get_language(user.id)
-    await message.answer(
-        t("welcome", lang=language, name=user.first_name or "foydalanuvchi"),
-        reply_markup=main_menu_keyboard(),
-    )
+    # The admin-configurable `welcome_text` setting (Phase 12) is the actual
+    # greeting whenever it's set — the i18n string only covers the gap
+    # before it's ever been seeded/configured, or a DB read failure.
+    welcome_text = await SettingsService(session).get("welcome_text")
+    if welcome_text is None:
+        welcome_text = t("welcome", lang=language, name=user.first_name or "foydalanuvchi")
+    await message.answer(welcome_text, reply_markup=main_menu_keyboard())
     logger.info("start_command", user_id=user.id)

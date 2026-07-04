@@ -21,6 +21,7 @@ from app.database.repositories.category_repository import CategoryRepository
 from app.database.repositories.movie_repository import MovieRepository
 from app.database.repositories.movie_view_repository import MovieViewRepository
 from app.services.premium.premium_service import PremiumService
+from app.services.settings.settings_service import SettingsService
 from app.services.stats.stats_service import increment_movies_sent
 
 # Sentinel distinguishing "leave this field alone" from "set it to None" in
@@ -57,6 +58,7 @@ class MovieService:
         self._category_repo = CategoryRepository(session)
         self._view_repo = MovieViewRepository(session)
         self._premium_service = PremiumService(session)
+        self._settings_service = SettingsService(session)
 
     async def create_movie(
         self,
@@ -186,8 +188,18 @@ class MovieService:
         return card
 
     async def check_access(self, user_id: int, movie: MovieCard) -> bool:
-        """``True`` unless ``movie`` is premium-only and ``user_id`` has no active premium."""
+        """``True`` unless ``movie`` is premium-only and ``user_id`` has no active premium.
+
+        Mirrors ``ForceSubscribeService``'s "settings toggle turns the whole
+        gate off" rule: with Phase 12's ``premium_enabled`` setting off, the
+        premium subsystem is off entirely, so every movie is freely
+        accessible regardless of ``is_premium`` — a user's actual premium
+        status (``PremiumService.is_premium``, still queried honestly
+        elsewhere, e.g. the Profil screen) is untouched by this switch.
+        """
         if not movie.is_premium:
+            return True
+        if not await self._settings_service.get_bool("premium_enabled", default=True):
             return True
         return await self._premium_service.is_premium(user_id)
 
