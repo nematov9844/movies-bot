@@ -134,3 +134,22 @@ export interface Admin {
   is_active: boolean;
   created_at: string;
 }
+
+export interface Series {
+  id: number;
+  title: string;
+  description: string | null;
+  is_active: boolean;
+}
+
+export interface Season {
+  id: number;
+  series_id: number;
+  number: number;
+  is_active: boolean;
+  episode_count: number;
+}
+
+export interface SeriesWithSeasons extends Series {
+  seasons: Season[];
+}

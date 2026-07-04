@@ -6,6 +6,7 @@ from app.database.models.movie import Category, Movie, MovieCategory
 from app.database.models.movie_view import MovieView
 from app.database.models.premium import PremiumPlan, PremiumUser
 from app.database.models.referral import Referral
+from app.database.models.series import Season, Series
 from app.database.models.settings import Setting
 from app.database.models.statistics import Statistics
 from app.database.models.user import User
@@ -22,6 +23,8 @@ __all__ = [
     "PremiumPlan",
     "PremiumUser",
     "Referral",
+    "Season",
+    "Series",
     "Setting",
     "Statistics",
     "User",

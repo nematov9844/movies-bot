@@ -20,6 +20,7 @@ from app.api.routes import (
     health,
     movies,
     premium,
+    series,
     stats,
     users,
 )
@@ -70,6 +71,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(movies.router)
+app.include_router(series.router)
 app.include_router(users.router)
 app.include_router(channels.router)
 app.include_router(premium.router)

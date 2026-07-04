@@ -24,10 +24,19 @@ class Movie(Base, TimestampMixin):
     created_by: Mapped[int | None] = mapped_column(
         BIGINT, ForeignKey("admins.id", ondelete="SET NULL"), nullable=True
     )
+    # Both NULL for a standalone movie. Set together when this row is one
+    # episode of a Series/Season (bulk-added via the bot's forward flow) —
+    # ON DELETE SET NULL so removing a season demotes its episodes back to
+    # standalone movies instead of deleting them.
+    season_id: Mapped[int | None] = mapped_column(
+        ForeignKey("seasons.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    episode_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     categories: Mapped[list["Category"]] = relationship(  # noqa: F821
         secondary="movie_categories", back_populates="movies"
     )
+    season: Mapped["Season | None"] = relationship()  # noqa: F821
 
 
 class Category(Base, TimestampMixin):

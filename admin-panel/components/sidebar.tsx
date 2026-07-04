@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Film,
+  Clapperboard,
   Users,
   Star,
   Radio,
@@ -17,11 +18,13 @@ import {
 
 import { cn } from "@/lib/utils";
 import { clearTokens } from "@/lib/auth";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { AdminRole } from "@/lib/types";
 
 const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; minRole?: AdminRole }[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/movies", label: "Kinolar", icon: Film },
+  { href: "/series", label: "Seriallar", icon: Clapperboard },
   { href: "/users", label: "Foydalanuvchilar", icon: Users },
   { href: "/premium", label: "Premium", icon: Star },
   { href: "/channels", label: "Kanallar", icon: Radio },
@@ -42,7 +45,10 @@ export function Sidebar({ role }: { role: AdminRole | null }) {
 
   return (
     <aside className="flex h-screen w-60 shrink-0 flex-col border-r bg-card">
-      <div className="border-b p-4 text-lg font-semibold">🎬 Admin Panel</div>
+      <div className="flex items-center justify-between border-b p-4">
+        <span className="text-lg font-semibold">🎬 Admin Panel</span>
+        <ThemeToggle />
+      </div>
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
         {NAV_ITEMS.filter((item) => !item.minRole || item.minRole === role).map((item) => {
           const active = pathname === item.href;

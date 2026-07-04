@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -22,3 +22,30 @@ class MovieRepository(BaseRepository[Movie]):
         stmt = select(Movie).where(Movie.code == code).options(selectinload(Movie.categories))
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def max_episode_number(self, season_id: int) -> int:
+        """The highest ``episode_number`` already used in this season, or 0 if it has none yet.
+
+        The bulk-forward flow's source of the *next* episode number
+        (``max + 1``) — rather than a running counter, so it's correct even
+        if an episode is later deleted/reordered.
+        """
+        result = await self.session.scalar(
+            select(func.max(Movie.episode_number)).where(Movie.season_id == season_id)
+        )
+        return result or 0
+
+    async def list_by_season(self, season_id: int, limit: int, offset: int) -> tuple[list[Movie], int]:
+        """Episodes of a season, in watch order, for the user-facing episode picker."""
+        filters = (Movie.season_id == season_id, Movie.is_active.is_(True))
+        total = await self.session.scalar(select(func.count()).select_from(Movie).where(*filters))
+
+        stmt = (
+            select(Movie)
+            .where(*filters)
+            .order_by(Movie.episode_number)
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all()), total or 0

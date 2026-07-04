@@ -224,9 +224,20 @@ class MovieService:
         await increment_movies_sent()
         bot_movies_sent_total.inc()
 
-    async def search(self, query: str, page: int, size: int) -> tuple[list[Movie], int]:
-        """Title ``ILIKE`` search over active movies, paginated."""
-        filters = (Movie.is_active.is_(True), Movie.title.ilike(f"%{query}%"))
+    async def search(
+        self, query: str, page: int, size: int, *, standalone_only: bool = False
+    ) -> tuple[list[Movie], int]:
+        """Title ``ILIKE`` search over active movies, paginated.
+
+        ``standalone_only`` excludes series episodes (``season_id IS NOT
+        NULL``) — used by the user-facing browse search, which shows a
+        matching Series grouped instead of its individual episodes (see
+        ``movie_search.py``). The admin panel's Movies page keeps the
+        default (``False``): admins manage every row, episodes included.
+        """
+        filters = [Movie.is_active.is_(True), Movie.title.ilike(f"%{query}%")]
+        if standalone_only:
+            filters.append(Movie.season_id.is_(None))
 
         total = await self._session.scalar(select(func.count()).select_from(Movie).where(*filters))
 

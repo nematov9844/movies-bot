@@ -20,6 +20,11 @@ from app.bot.keyboards.movie import (
     category_list_keyboard,
     movie_list_keyboard,
 )
+from app.bot.keyboards.series import (
+    episode_list_keyboard,
+    season_list_keyboard,
+    series_results_keyboard,
+)
 from app.bot.states.movie import SearchStates
 from app.core.constants import (
     NEW_MOVIES_LIMIT,
@@ -31,10 +36,12 @@ from app.core.constants import (
 from app.database.models import Movie
 from app.database.repositories.category_repository import CategoryRepository
 from app.services.movie.movie_service import MovieService
+from app.services.series.series_service import SeriesService
 
 router = Router(name="user_movie_search")
 
 _DELIVER_CALLBACK = "mv:deliver:{code}"
+_SERIES_RESULTS_LIMIT = 5
 
 BROWSE_MENU_TEXT = "🔍 Nima qilishni xohlaysiz?"
 SEARCH_QUERY_PROMPT = "🔎 Qidirilayotgan kino nomini kiriting:"
@@ -42,6 +49,10 @@ NO_RESULTS_TEXT = "Hech narsa topilmadi."
 NO_CATEGORIES_TEXT = "Hozircha kategoriyalar mavjud emas."
 CATEGORY_LIST_TEXT = "🗂 Kategoriyani tanlang:"
 CATEGORY_NOT_FOUND_TEXT = "Kategoriya topilmadi."
+SERIES_NOT_FOUND_TEXT = "Serial topilmadi."
+SEASON_NOT_FOUND_TEXT = "Fasl topilmadi."
+NO_SEASONS_TEXT = "Bu serialda hozircha fasllar yo'q."
+NO_EPISODES_TEXT = "Bu faslda hozircha qismlar yo'q."
 
 
 def _movie_rows_text(movies: Sequence[Movie]) -> str:
@@ -61,20 +72,28 @@ async def open_browse_menu(message: Message, state: FSMContext) -> None:
 
 
 async def _build_search_page(session: AsyncSession, query: str, page: int) -> tuple[str, InlineKeyboardMarkup]:
-    movies, total = await MovieService(session).search(query, page, SEARCH_PAGE_SIZE)
+    """Combines matching series (as one tappable group each, not their 100s of episodes) with
+    standalone-movie results (``standalone_only=True`` excludes episodes from the flat list —
+    they're only reachable by drilling into their series/season, per the TZ)."""
+    series_list, _ = await SeriesService(session).search_series(query, _SERIES_RESULTS_LIMIT, 0)
+    movies, total = await MovieService(session).search(query, page, SEARCH_PAGE_SIZE, standalone_only=True)
     total_pages = max(1, math.ceil(total / SEARCH_PAGE_SIZE))
+
     # `query` is raw user-typed text echoed back under HTML parse_mode —
     # escaped so it can't break entity parsing or spoof formatting.
     header = f'🔎 "{html.escape(query)}" bo\'yicha natijalar ({page}/{total_pages}):'
-    body = _movie_rows_text(movies) if movies else NO_RESULTS_TEXT
-    keyboard = movie_list_keyboard(
+    body = _movie_rows_text(movies) if movies else (NO_RESULTS_TEXT if not series_list else "")
+    text = f"{header}\n\n{body}" if body else header
+
+    movie_keyboard = movie_list_keyboard(
         movies,
         _DELIVER_CALLBACK,
         page=page,
         total_pages=total_pages,
         page_callback="mv:search:page:{page}",
     )
-    return f"{header}\n\n{body}", keyboard
+    combined_rows = [*series_results_keyboard(series_list).inline_keyboard, *movie_keyboard.inline_keyboard]
+    return text, InlineKeyboardMarkup(inline_keyboard=combined_rows)
 
 
 @router.callback_query(F.data == "mv:search", flags={"content_gate": True})
@@ -203,6 +222,81 @@ async def show_category_movies(callback: CallbackQuery, session: AsyncSession) -
     if result is None:
         await callback.message.edit_text(CATEGORY_NOT_FOUND_TEXT)
         await callback.answer()
+        return
+
+    text, keyboard = result
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.answer()
+
+
+# --- Series -> seasons -> episodes ------------------------------------------
+
+
+@router.callback_query(F.data.startswith("mv:series:"), flags={"content_gate": True})
+async def show_series_seasons(callback: CallbackQuery, session: AsyncSession) -> None:
+    if callback.data is None or not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+
+    series_id = int(callback.data.removeprefix("mv:series:"))
+    series = await SeriesService(session).get_series_with_seasons(series_id)
+    if series is None:
+        await callback.answer(SERIES_NOT_FOUND_TEXT, show_alert=True)
+        return
+
+    seasons = [season for season in series.seasons if season.is_active]
+    header = f"📺 <b>{series.title}</b>\n\n{series.description or ''}"
+    if not seasons:
+        await callback.message.edit_text(f"{header}\n\n{NO_SEASONS_TEXT}")
+    else:
+        await callback.message.edit_text(header, reply_markup=season_list_keyboard(seasons))
+    await callback.answer()
+
+
+async def _build_episode_page(
+    session: AsyncSession, season_id: int, page: int
+) -> tuple[str, InlineKeyboardMarkup] | None:
+    service = SeriesService(session)
+    season = await service.get_season(season_id)
+    if season is None:
+        return None
+    series = await service.get_series(season.series_id)
+
+    episodes, total = await service.list_episodes(season_id, SEARCH_PAGE_SIZE, (page - 1) * SEARCH_PAGE_SIZE)
+    total_pages = max(1, math.ceil(total / SEARCH_PAGE_SIZE))
+    header = f"📺 <b>{series.title if series else '?'} — {season.number}-fasl</b> ({page}/{total_pages}):"
+    body = "\n".join(f"• {ep.episode_number}-qism" for ep in episodes) if episodes else NO_EPISODES_TEXT
+    keyboard = episode_list_keyboard(episodes, season_id, page=page, total_pages=total_pages)
+    return f"{header}\n\n{body}", keyboard
+
+
+@router.callback_query(F.data.startswith("mv:season:"), flags={"content_gate": True})
+async def show_season_episodes(callback: CallbackQuery, session: AsyncSession) -> None:
+    if callback.data is None or not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+
+    season_id = int(callback.data.removeprefix("mv:season:"))
+    result = await _build_episode_page(session, season_id, 1)
+    if result is None:
+        await callback.answer(SEASON_NOT_FOUND_TEXT, show_alert=True)
+        return
+
+    text, keyboard = result
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("mv:ep_page:"), flags={"content_gate": True})
+async def paginate_episodes(callback: CallbackQuery, session: AsyncSession) -> None:
+    if callback.data is None or not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+
+    season_id_str, page_str = callback.data.removeprefix("mv:ep_page:").split(":")
+    result = await _build_episode_page(session, int(season_id_str), int(page_str))
+    if result is None:
+        await callback.answer(SEASON_NOT_FOUND_TEXT, show_alert=True)
         return
 
     text, keyboard = result
