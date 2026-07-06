@@ -18,6 +18,7 @@ from app.bot.keyboards.movie import (
     category_picker_keyboard,
     confirm_keyboard,
     skip_keyboard,
+    suggestion_keyboard,
     yes_no_keyboard,
 )
 from app.bot.states.movie import AddMovieStates
@@ -30,6 +31,7 @@ from app.database.repositories.category_repository import CategoryRepository
 from app.database.repositories.movie_repository import MovieRepository
 from app.services.audit.audit_service import AuditService
 from app.services.movie.movie_service import MovieService
+from app.services.parser.caption_parser import extract_deterministic
 
 router = Router(name="admin_movie_add")
 logger = get_logger(__name__)
@@ -42,9 +44,16 @@ _PREMIUM_YES_CALLBACK = "madd:prem:yes"
 _PREMIUM_NO_CALLBACK = "madd:prem:no"
 _CONFIRM_CALLBACK = "madd:confirm"
 _CANCEL_CALLBACK = "madd:cancel"
+_DUPLICATE_CONTINUE_CALLBACK = "madd:dup:continue"
+_DUPLICATE_CANCEL_CALLBACK = "madd:dup:cancel"
+_TITLE_SUGGESTION_ACCEPT_CALLBACK = "madd:title_suggest"
 
 VIDEO_PROMPT = "🎬 Kino videosini yuboring."
 NOT_VIDEO_TEXT = "❌ Bu video emas. Iltimos, kino videosini yuboring."
+DUPLICATE_WARNING_TEXT = (
+    "⚠️ Bu video allaqachon bazada mavjud (kod: <code>{code}</code>, nomi: {title}).\n"
+    "Baribir davom etasizmi?"
+)
 CODE_PROMPT = "🔑 Kino uchun kod kiriting (masalan: 123):"
 CODE_EMPTY_TEXT = "❌ Kod bo'sh bo'lishi mumkin emas. Qayta kiriting:"
 CODE_INVALID_TEXT = (
@@ -53,6 +62,7 @@ CODE_INVALID_TEXT = (
 )
 CODE_TAKEN_TEXT = "❌ Bu kod band. Boshqa kod kiriting:"
 TITLE_PROMPT = "📝 Kino nomini kiriting:"
+TITLE_SUGGESTION_TEXT = "🤖 Taklif qilingan nom: <b>{title}</b>"
 TITLE_EMPTY_TEXT = "❌ Nom bo'sh bo'lishi mumkin emas. Qayta kiriting:"
 DESCRIPTION_PROMPT = "📄 Kino tavsifini kiriting (yoki o'tkazib yuboring):"
 NO_CATEGORIES_TEXT = "ℹ️ Hozircha kategoriyalar mavjud emas."
@@ -111,7 +121,7 @@ async def start_add_movie(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.message(AddMovieStates.waiting_for_video, HasPermission(Permission.MANAGE_MOVIES))
-async def receive_video(message: Message, state: FSMContext, bot: Bot) -> None:
+async def receive_video(message: Message, state: FSMContext, bot: Bot, session: AsyncSession) -> None:
     if message.video is None:
         await message.answer(NOT_VIDEO_TEXT)
         return
@@ -128,15 +138,61 @@ async def receive_video(message: Message, state: FSMContext, bot: Bot) -> None:
         await message.answer(NOT_VIDEO_TEXT)
         return
 
+    # Deterministic (regex-only) extraction — pure, no I/O, safe to always
+    # run. Only a "title" the parser is confident about (regex-sourced, not
+    # a guess) is worth suggesting; quality/year are supplementary metadata
+    # this wizard never asked for before, so any regex hit is a free upgrade.
+    parsed = extract_deterministic(message.caption or "")
     await state.update_data(
         file_id=sent.video.file_id,
         file_unique_id=sent.video.file_unique_id,
         storage_message_id=sent.message_id,
         duration=sent.video.duration,
         file_size=sent.video.file_size,
+        suggested_title=parsed.title if parsed.sources.get("title") == "regex" else None,
+        quality=parsed.quality,
+        year=parsed.year,
     )
+
+    duplicate = (
+        await MovieRepository(session).get_by_file_unique_id(sent.video.file_unique_id)
+        if sent.video.file_unique_id
+        else None
+    )
+    if duplicate is not None:
+        await state.set_state(AddMovieStates.waiting_for_duplicate_confirm)
+        await message.answer(
+            DUPLICATE_WARNING_TEXT.format(code=duplicate.code, title=duplicate.title),
+            reply_markup=yes_no_keyboard(_DUPLICATE_CONTINUE_CALLBACK, _DUPLICATE_CANCEL_CALLBACK),
+        )
+        return
+
     await state.set_state(AddMovieStates.waiting_for_code)
     await message.answer(CODE_PROMPT)
+
+
+@router.callback_query(
+    AddMovieStates.waiting_for_duplicate_confirm,
+    F.data == _DUPLICATE_CONTINUE_CALLBACK,
+    HasPermission(Permission.MANAGE_MOVIES),
+)
+async def continue_after_duplicate_warning(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(AddMovieStates.waiting_for_code)
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(CODE_PROMPT)
+    await callback.answer()
+
+
+@router.callback_query(
+    AddMovieStates.waiting_for_duplicate_confirm,
+    F.data == _DUPLICATE_CANCEL_CALLBACK,
+    HasPermission(Permission.MANAGE_MOVIES),
+)
+async def cancel_after_duplicate_warning(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(CANCELLED_TEXT)
+    await callback.answer()
 
 
 @router.message(AddMovieStates.waiting_for_code, HasPermission(Permission.MANAGE_MOVIES))
@@ -156,7 +212,16 @@ async def receive_code(message: Message, state: FSMContext, session: AsyncSessio
 
     await state.update_data(code=code)
     await state.set_state(AddMovieStates.waiting_for_title)
-    await message.answer(TITLE_PROMPT)
+
+    data = await state.get_data()
+    suggested_title = data.get("suggested_title")
+    if suggested_title:
+        await message.answer(
+            f"{TITLE_PROMPT}\n\n{TITLE_SUGGESTION_TEXT.format(title=suggested_title)}",
+            reply_markup=suggestion_keyboard(_TITLE_SUGGESTION_ACCEPT_CALLBACK),
+        )
+    else:
+        await message.answer(TITLE_PROMPT)
 
 
 @router.message(AddMovieStates.waiting_for_title, HasPermission(Permission.MANAGE_MOVIES))
@@ -169,6 +234,24 @@ async def receive_title(message: Message, state: FSMContext) -> None:
     await state.update_data(title=title)
     await state.set_state(AddMovieStates.waiting_for_description)
     await message.answer(DESCRIPTION_PROMPT, reply_markup=skip_keyboard(_DESCRIPTION_SKIP_CALLBACK))
+
+
+@router.callback_query(
+    AddMovieStates.waiting_for_title,
+    F.data == _TITLE_SUGGESTION_ACCEPT_CALLBACK,
+    HasPermission(Permission.MANAGE_MOVIES),
+)
+async def accept_title_suggestion(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    suggested_title = data.get("suggested_title")
+    if not suggested_title or not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+
+    await state.update_data(title=suggested_title)
+    await state.set_state(AddMovieStates.waiting_for_description)
+    await callback.message.edit_text(DESCRIPTION_PROMPT, reply_markup=skip_keyboard(_DESCRIPTION_SKIP_CALLBACK))
+    await callback.answer()
 
 
 @router.message(AddMovieStates.waiting_for_description, HasPermission(Permission.MANAGE_MOVIES))
@@ -268,6 +351,8 @@ async def confirm_add(callback: CallbackQuery, state: FSMContext, session: Async
         is_premium=bool(data.get("is_premium")),
         created_by=admin.id if admin is not None else None,
         category_ids=data.get("category_ids", []),
+        quality=data.get("quality"),
+        year=data.get("year"),
     )
 
     await AuditService(session).log(

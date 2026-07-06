@@ -42,3 +42,13 @@ async def test_count_with_filter(session: AsyncSession) -> None:
 
     assert await repo.count(is_premium=True) == 1
     assert await repo.count(is_premium=False) == 1
+
+
+async def test_get_by_file_unique_id(session: AsyncSession) -> None:
+    repo = MovieRepository(session)
+    await repo.create(code="m6", title="Movie Six", file_id="file6", file_unique_id="uniq-6")
+
+    found = await repo.get_by_file_unique_id("uniq-6")
+    assert found is not None
+    assert found.code == "m6"
+    assert await repo.get_by_file_unique_id("does-not-exist") is None

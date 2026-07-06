@@ -53,6 +53,12 @@ class SeriesService:
     async def get_series(self, series_id: int) -> Series | None:
         return await self._series_repo.get(series_id)
 
+    async def get_series_by_title(self, title: str) -> Series | None:
+        """Exact (case-insensitive) title match — for the caption parser's find-or-create
+        step, where an ILIKE substring hit (``search_series``) would risk attaching an
+        episode to the wrong show (e.g. "Naruto" matching "Naruto Shippuden")."""
+        return await self._series_repo.get_by_title(title)
+
     async def get_series_with_seasons(self, series_id: int) -> Series | None:
         return await self._series_repo.get_with_seasons(series_id)
 
@@ -93,6 +99,9 @@ class SeriesService:
         existing = await self._season_repo.get_by_series_and_number(series_id, number)
         return existing is not None and existing.id != exclude_season_id
 
+    async def get_season_by_number(self, series_id: int, number: int) -> Season | None:
+        return await self._season_repo.get_by_series_and_number(series_id, number)
+
     async def update_season(self, season_id: int, number: int) -> Season | None:
         return await self._season_repo.update(season_id, number=number)
 
@@ -123,6 +132,8 @@ class SeriesService:
         file_size: int | None,
         is_premium: bool,
         created_by: int | None,
+        quality: str | None = None,
+        year: int | None = None,
     ) -> Movie:
         """Appends the next episode to a season — auto-numbered, auto-coded, no admin prompts.
 
@@ -146,6 +157,8 @@ class SeriesService:
             season_id=season_id,
             episode_number=episode_number,
             created_by=created_by,
+            quality=quality,
+            year=year,
         )
 
     async def list_episodes(self, season_id: int, limit: int, offset: int) -> tuple[list[Movie], int]:

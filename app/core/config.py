@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     sentry_dsn: str | None = None
     timezone: str = "Asia/Tashkent"
 
+    # Caption parser (Phase: AI-assisted series/season/episode extraction).
+    # Optional — CaptionParserService works deterministically (regex-only)
+    # without this; it's only used as a fallback to fill fields the regex
+    # layer left null. Unset in dev/test is fine.
+    anthropic_api_key: str | None = None
+    anthropic_model: str = "claude-sonnet-5"
+
     @computed_field
     @property
     def cors_origins_list(self) -> list[str]:

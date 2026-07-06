@@ -5,6 +5,7 @@ class AddMovieStates(StatesGroup):
     """The admin `/panel` -> "Kino qo'shish" wizard, one state per prompt."""
 
     waiting_for_video = State()
+    waiting_for_duplicate_confirm = State()
     waiting_for_code = State()
     waiting_for_title = State()
     waiting_for_description = State()

@@ -10,6 +10,14 @@ class MovieRepository(BaseRepository[Movie]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, Movie)
 
+    async def get_by_file_unique_id(self, file_unique_id: str) -> Movie | None:
+        """Finds an existing row for the same Telegram file — ``file_unique_id`` is stable
+        across re-forwards/re-uploads of the same underlying video, so a hit here means this
+        exact video was already stored, not just a title collision."""
+        stmt = select(Movie).where(Movie.file_unique_id == file_unique_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_by_code(self, code: str) -> Movie | None:
         """Look up a movie by its unique code, with ``categories`` eager-loaded.
 
