@@ -134,13 +134,21 @@ class SeriesService:
         created_by: int | None,
         quality: str | None = None,
         year: int | None = None,
+        episode_number: int | None = None,
     ) -> Movie:
-        """Appends the next episode to a season — auto-numbered, auto-coded, no admin prompts.
+        """Appends an episode to a season.
 
-        Episode number is ``max(existing) + 1`` (not a stored counter), so
-        it stays correct even if an earlier episode is later removed.
+        ``episode_number=None`` (the bulk-forward admin flow's case, where
+        captions rarely carry a reliable number) auto-numbers as
+        ``max(existing) + 1`` — not a stored counter, so it stays correct
+        even if an earlier episode is later removed. Passing an explicit
+        number (the caption parser's case, which actually knows which
+        episode this is — possibly out of order, possibly with gaps) uses
+        it as-is instead: silently renumbering a caption-confirmed "Episode
+        47" to "next available slot" would be a guess, not an extraction.
         """
-        episode_number = await self._movie_repo.max_episode_number(season_id) + 1
+        if episode_number is None:
+            episode_number = await self._movie_repo.max_episode_number(season_id) + 1
         slug = _slugify(series_title)
         code = f"{slug}-{season_id}-s{season_number}e{episode_number}"
 

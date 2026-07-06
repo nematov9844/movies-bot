@@ -9,6 +9,11 @@ parser left ambiguous:
 - an ``episode_number`` with no ``season_number`` -> which season it
   belongs to is genuinely unknown; defaulting to season 1 would be a guess,
   not an extraction.
+- a parsed ``episode_number`` that's already taken in that season -> refuses
+  rather than silently renumbering or overwriting the existing row (this
+  matters for bulk backfills off a channel's full history, where posts
+  aren't necessarily processed in episode order and a real duplicate/
+  mislabeled post is exactly the kind of thing a human should look at).
 """
 
 import re
@@ -118,6 +123,17 @@ class CaptionIngestService:
         if season is None:
             season = await self._series_service.create_season(series.id, season_number)
 
+        episode_number = parsed.episode_number
+        assert episode_number is not None  # guaranteed by ``parsed.is_episode``
+        clash = await self._movie_repo.get_by_season_and_episode(season.id, episode_number)
+        if clash is not None:
+            return IngestResult(
+                success=False,
+                reason="episode_number_taken",
+                series_id=series.id,
+                season_id=season.id,
+            )
+
         episode = await self._series_service.add_episode(
             season_id=season.id,
             series_title=series.title,
@@ -131,6 +147,7 @@ class CaptionIngestService:
             created_by=created_by,
             quality=parsed.quality,
             year=parsed.year,
+            episode_number=episode_number,
         )
         return IngestResult(success=True, movie=episode, series_id=series.id, season_id=season.id)
 

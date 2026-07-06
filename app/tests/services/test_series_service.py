@@ -233,3 +233,27 @@ async def test_add_episode_stores_quality_and_year(session: AsyncSession) -> Non
 
     assert episode.quality == "1080p"
     assert episode.year == 2013
+
+
+async def test_add_episode_with_explicit_episode_number_ignores_sequential_position(
+    session: AsyncSession,
+) -> None:
+    service = SeriesService(session)
+    series = await service.create_series("Naruto")
+    season = await service.create_season(series.id, 1)
+
+    episode = await service.add_episode(
+        season_id=season.id,
+        series_title=series.title,
+        season_number=season.number,
+        file_id="f1",
+        file_unique_id=None,
+        storage_message_id=None,
+        duration=None,
+        file_size=None,
+        is_premium=False,
+        created_by=None,
+        episode_number=47,
+    )
+
+    assert episode.episode_number == 47

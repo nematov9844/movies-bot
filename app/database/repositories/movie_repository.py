@@ -43,6 +43,13 @@ class MovieRepository(BaseRepository[Movie]):
         )
         return result or 0
 
+    async def get_by_season_and_episode(self, season_id: int, episode_number: int) -> Movie | None:
+        """Finds the episode already occupying this slot, if any — guards the caption parser's
+        ingest path against silently colliding with (or overwriting) an existing episode number."""
+        stmt = select(Movie).where(Movie.season_id == season_id, Movie.episode_number == episode_number)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def list_by_season(self, season_id: int, limit: int, offset: int) -> tuple[list[Movie], int]:
         """Episodes of a season, in watch order, for the user-facing episode picker."""
         filters = (Movie.season_id == season_id, Movie.is_active.is_(True))

@@ -37,6 +37,40 @@ async def test_save_second_episode_reuses_existing_series_and_season(session: As
     assert result2.movie.episode_number == 2
 
 
+async def test_save_episode_uses_parsed_episode_number_not_sequential_position(
+    session: AsyncSession,
+) -> None:
+    """Regression guard: a bulk backfill processes a channel's posts in whatever order they're
+    read, not necessarily episode order — the very first post handled for a season might be
+    "Episode 47". Blindly auto-numbering it as episode 1 (SeriesService.add_episode's default,
+    meant for the admin's no-caption-info bulk-forward flow) would silently mislabel it."""
+    parsed = ParsedCaption(title="Naruto", season_number=1, episode_number=47)
+    result = await CaptionIngestService(session).save(parsed, file_id="f1")
+
+    assert result.success is True
+    assert result.movie is not None
+    assert result.movie.episode_number == 47
+
+
+async def test_save_refuses_conflicting_episode_number(session: AsyncSession) -> None:
+    parsed1 = ParsedCaption(title="Naruto", season_number=1, episode_number=5)
+    parsed2 = ParsedCaption(title="Naruto", season_number=1, episode_number=5)
+    service = CaptionIngestService(session)
+
+    result1 = await service.save(parsed1, file_id="f1")
+    result2 = await service.save(parsed2, file_id="f2")
+
+    assert result1.success is True
+    assert result2.success is False
+    assert result2.reason == "episode_number_taken"
+
+    # The original episode 5 is untouched — still pointing at its own file, not overwritten.
+    assert result1.movie is not None
+    refreshed = await MovieRepository(session).get(result1.movie.id)
+    assert refreshed is not None
+    assert refreshed.file_id == "f1"
+
+
 async def test_save_standalone_movie_has_no_season(session: AsyncSession) -> None:
     parsed = ParsedCaption(title="Standalone Movie", year=2024)
     result = await CaptionIngestService(session).save(parsed, file_id="f1")
