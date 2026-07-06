@@ -30,7 +30,15 @@ from app.services.force_subscribe.force_subscribe_service import ForceSubscribeS
 
 logger = get_logger(__name__)
 
-FORCE_SUBSCRIBE_TEXT = "📢 Botdan foydalanish uchun quyidagi kanal(lar)ga obuna bo'ling:"
+# Shown in both Uzbek and Russian together (not per-user language) — a
+# subscription gate needs to be unambiguous to every user regardless of
+# their selected interface language.
+FORCE_SUBSCRIBE_TEXT = (
+    "📢 <b>Botdan foydalanish uchun quyidagi kanal(lar)ga obuna bo'ling</b>\n"
+    "📢 <b>Чтобы пользоваться ботом, подпишитесь на канал(ы) ниже</b>\n\n"
+    "Obuna bo'lgach, pastdagi \"✅ Tekshirish\" tugmasini bosing.\n"
+    "После подписки нажмите кнопку \"✅ Tekshirish\" ниже."
+)
 
 
 def _resolve_chat_id(event: TelegramObject) -> int | None:

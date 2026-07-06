@@ -15,7 +15,7 @@ from app.database.models import Channel
 
 logger = get_logger(__name__)
 
-VERIFY_BUTTON_TEXT = "✅ Tekshirish"
+VERIFY_BUTTON_TEXT = "✅ Tekshirish / Проверить"
 VERIFY_CALLBACK = "fs:verify"
 
 

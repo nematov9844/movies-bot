@@ -21,8 +21,15 @@ from app.services.force_subscribe.force_subscribe_service import ForceSubscribeS
 router = Router(name="user_force_subscribe")
 logger = get_logger(__name__)
 
-VERIFIED_ALERT_TEXT = "✅ Obuna tasdiqlandi!"
-PENDING_EXPIRED_TEXT = "✅ Obuna tasdiqlandi. Endi so'rovingizni qayta yuboring."
+VERIFIED_ALERT_TEXT = "✅ Obuna tasdiqlandi! / Подписка подтверждена!"
+PENDING_EXPIRED_TEXT = (
+    "✅ Obuna tasdiqlandi. Endi so'rovingizni qayta yuboring.\n"
+    "✅ Подписка подтверждена. Отправьте запрос ещё раз."
+)
+STILL_NOT_SUBSCRIBED_ALERT_TEXT = (
+    "❌ Siz hali barcha kanal(lar)ga obuna bo'lmagansiz.\n"
+    "❌ Вы ещё не подписались на все каналы."
+)
 
 
 async def _safe_edit_text(message: Message, text: str, **kwargs: object) -> None:
@@ -59,10 +66,11 @@ async def verify_subscription(
     blocking = await service.check(user.id)
     if blocking:
         # Still missing some — re-render the same block screen in place
-        # (edit, don't spam a new message) with the current state. No
-        # scolding copy; the user just needs to see what's left.
+        # (edit, don't spam a new message) with the current state, plus a
+        # clear popup alert so a silent re-render (which looks identical to
+        # what was already on screen) doesn't read as "nothing happened".
         await _safe_edit_text(callback.message, FORCE_SUBSCRIBE_TEXT, reply_markup=force_subscribe_keyboard(blocking))
-        await callback.answer()
+        await callback.answer(STILL_NOT_SUBSCRIBED_ALERT_TEXT, show_alert=True)
         return
 
     # check() came back empty, which means the user is now confirmed
