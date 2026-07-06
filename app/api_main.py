@@ -16,6 +16,7 @@ from app.api.routes import (
     audit_logs,
     auth,
     broadcasts,
+    categories,
     channels,
     health,
     movies,
@@ -72,6 +73,7 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(movies.router)
 app.include_router(series.router)
+app.include_router(categories.router)
 app.include_router(users.router)
 app.include_router(channels.router)
 app.include_router(premium.router)
