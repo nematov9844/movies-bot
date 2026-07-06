@@ -30,3 +30,10 @@ class SeriesRepository(BaseRepository[Series]):
         stmt = select(Series).where(Series.id == id).options(selectinload(Series.seasons))
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def get_by_title(self, title: str) -> Series | None:
+        """Exact case-insensitive match — unlike ``search``'s ILIKE substring match, this
+        won't confuse "Naruto" with "Naruto Shippuden" when finding-or-creating by title."""
+        stmt = select(Series).where(func.lower(Series.title) == title.lower())
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()

@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.repositories.movie_repository import MovieRepository
+from app.services.series.series_service import SeriesService
 
 
 async def test_create_and_get(session: AsyncSession) -> None:
@@ -42,3 +43,27 @@ async def test_count_with_filter(session: AsyncSession) -> None:
 
     assert await repo.count(is_premium=True) == 1
     assert await repo.count(is_premium=False) == 1
+
+
+async def test_get_by_file_unique_id(session: AsyncSession) -> None:
+    repo = MovieRepository(session)
+    await repo.create(code="m6", title="Movie Six", file_id="file6", file_unique_id="uniq-6")
+
+    found = await repo.get_by_file_unique_id("uniq-6")
+    assert found is not None
+    assert found.code == "m6"
+    assert await repo.get_by_file_unique_id("does-not-exist") is None
+
+
+async def test_get_by_season_and_episode(session: AsyncSession) -> None:
+    series = await SeriesService(session).create_series("Repo Test Show")
+    season = await SeriesService(session).create_season(series.id, 1)
+    repo = MovieRepository(session)
+    await repo.create(
+        code="m7", title="Episode Five", file_id="file7", season_id=season.id, episode_number=5
+    )
+
+    found = await repo.get_by_season_and_episode(season.id, 5)
+    assert found is not None
+    assert found.code == "m7"
+    assert await repo.get_by_season_and_episode(season.id, 6) is None

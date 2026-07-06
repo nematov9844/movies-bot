@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 from aiogram import Bot
-from aiogram.types import Chat, Message
+from aiogram.types import Chat, Message, MessageOriginChannel, Video
 from aiogram.types import User as TgUser
 
 
@@ -34,5 +34,41 @@ def make_message(
     chat = Chat(id=chat_id or user_id, type="private")
     message = Message.model_construct(
         message_id=1, date=datetime.now(UTC), chat=chat, from_user=user, text=text
+    )
+    return message.as_(bot), bot
+
+
+def make_video(
+    *, file_id: str = "video-file-id", file_unique_id: str = "video-unique-id"
+) -> Video:
+    return Video(file_id=file_id, file_unique_id=file_unique_id, width=1280, height=720, duration=120)
+
+
+def make_channel_post(
+    chat_id: int,
+    *,
+    chat_username: str | None = None,
+    caption: str | None = None,
+    video: Video | None = None,
+    forwarded: bool = False,
+    message_id: int = 1,
+    bot: AsyncMock | None = None,
+) -> tuple[Message, AsyncMock]:
+    """A channel_post-shaped ``Message`` — no ``from_user`` (channel posts are attributed to
+    the channel, not a user), optionally carrying a video and/or genuine forward metadata."""
+    bot = bot or make_bot()
+    chat = Chat(id=chat_id, type="channel", username=chat_username)
+    forward_origin = (
+        MessageOriginChannel(date=datetime.now(UTC), chat=chat, message_id=message_id)
+        if forwarded
+        else None
+    )
+    message = Message.model_construct(
+        message_id=message_id,
+        date=datetime.now(UTC),
+        chat=chat,
+        caption=caption,
+        video=video,
+        forward_origin=forward_origin,
     )
     return message.as_(bot), bot

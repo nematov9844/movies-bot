@@ -10,6 +10,14 @@ class MovieRepository(BaseRepository[Movie]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, Movie)
 
+    async def get_by_file_unique_id(self, file_unique_id: str) -> Movie | None:
+        """Finds an existing row for the same Telegram file — ``file_unique_id`` is stable
+        across re-forwards/re-uploads of the same underlying video, so a hit here means this
+        exact video was already stored, not just a title collision."""
+        stmt = select(Movie).where(Movie.file_unique_id == file_unique_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_by_code(self, code: str) -> Movie | None:
         """Look up a movie by its unique code, with ``categories`` eager-loaded.
 
@@ -34,6 +42,13 @@ class MovieRepository(BaseRepository[Movie]):
             select(func.max(Movie.episode_number)).where(Movie.season_id == season_id)
         )
         return result or 0
+
+    async def get_by_season_and_episode(self, season_id: int, episode_number: int) -> Movie | None:
+        """Finds the episode already occupying this slot, if any — guards the caption parser's
+        ingest path against silently colliding with (or overwriting) an existing episode number."""
+        stmt = select(Movie).where(Movie.season_id == season_id, Movie.episode_number == episode_number)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def list_by_season(self, season_id: int, limit: int, offset: int) -> tuple[list[Movie], int]:
         """Episodes of a season, in watch order, for the user-facing episode picker."""

@@ -53,6 +53,12 @@ class SeriesService:
     async def get_series(self, series_id: int) -> Series | None:
         return await self._series_repo.get(series_id)
 
+    async def get_series_by_title(self, title: str) -> Series | None:
+        """Exact (case-insensitive) title match — for the caption parser's find-or-create
+        step, where an ILIKE substring hit (``search_series``) would risk attaching an
+        episode to the wrong show (e.g. "Naruto" matching "Naruto Shippuden")."""
+        return await self._series_repo.get_by_title(title)
+
     async def get_series_with_seasons(self, series_id: int) -> Series | None:
         return await self._series_repo.get_with_seasons(series_id)
 
@@ -93,6 +99,9 @@ class SeriesService:
         existing = await self._season_repo.get_by_series_and_number(series_id, number)
         return existing is not None and existing.id != exclude_season_id
 
+    async def get_season_by_number(self, series_id: int, number: int) -> Season | None:
+        return await self._season_repo.get_by_series_and_number(series_id, number)
+
     async def update_season(self, season_id: int, number: int) -> Season | None:
         return await self._season_repo.update(season_id, number=number)
 
@@ -123,13 +132,23 @@ class SeriesService:
         file_size: int | None,
         is_premium: bool,
         created_by: int | None,
+        quality: str | None = None,
+        year: int | None = None,
+        episode_number: int | None = None,
     ) -> Movie:
-        """Appends the next episode to a season — auto-numbered, auto-coded, no admin prompts.
+        """Appends an episode to a season.
 
-        Episode number is ``max(existing) + 1`` (not a stored counter), so
-        it stays correct even if an earlier episode is later removed.
+        ``episode_number=None`` (the bulk-forward admin flow's case, where
+        captions rarely carry a reliable number) auto-numbers as
+        ``max(existing) + 1`` — not a stored counter, so it stays correct
+        even if an earlier episode is later removed. Passing an explicit
+        number (the caption parser's case, which actually knows which
+        episode this is — possibly out of order, possibly with gaps) uses
+        it as-is instead: silently renumbering a caption-confirmed "Episode
+        47" to "next available slot" would be a guess, not an extraction.
         """
-        episode_number = await self._movie_repo.max_episode_number(season_id) + 1
+        if episode_number is None:
+            episode_number = await self._movie_repo.max_episode_number(season_id) + 1
         slug = _slugify(series_title)
         code = f"{slug}-{season_id}-s{season_number}e{episode_number}"
 
@@ -146,6 +165,8 @@ class SeriesService:
             season_id=season_id,
             episode_number=episode_number,
             created_by=created_by,
+            quality=quality,
+            year=year,
         )
 
     async def list_episodes(self, season_id: int, limit: int, offset: int) -> tuple[list[Movie], int]:
