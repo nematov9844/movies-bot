@@ -131,6 +131,26 @@ async def test_create_movie_stores_poster_file_id(session: AsyncSession) -> None
     assert movie.poster_file_id == "poster-abc"
 
 
+async def test_create_movie_stores_quality_and_year(session: AsyncSession) -> None:
+    service = MovieService(session)
+    movie = await service.create_movie(
+        code="quality-test",
+        title="Quality Test",
+        description=None,
+        file_id="f1",
+        file_unique_id=None,
+        storage_message_id=None,
+        duration=None,
+        file_size=None,
+        is_premium=False,
+        created_by=None,
+        quality="1080p",
+        year=2010,
+    )
+    assert movie.quality == "1080p"
+    assert movie.year == 2010
+
+
 async def test_update_movie_changes_poster_file_id(session: AsyncSession) -> None:
     service = MovieService(session)
     movie = await MovieRepository(session).create(code="poster-test", title="Poster Test", file_id="f1")

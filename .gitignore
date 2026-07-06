@@ -21,3 +21,7 @@ admin-panel/tsconfig.tsbuildinfo
 *.sqlite3
 dist/
 build/
+# Telethon userbot session (scripts/backfill_channels.py) — grants full
+# access to whatever Telegram account logged in to create it.
+*.session
+*.session-journal

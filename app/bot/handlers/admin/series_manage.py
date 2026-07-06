@@ -31,7 +31,9 @@ from app.core.config import settings
 from app.core.logger import get_logger
 from app.core.permissions import Permission
 from app.database.repositories.admin_repository import AdminRepository
+from app.database.repositories.movie_repository import MovieRepository
 from app.services.audit.audit_service import AuditService
+from app.services.parser.caption_parser import extract_deterministic
 from app.services.series.series_service import SeriesService
 
 router = Router(name="admin_series_manage")
@@ -298,6 +300,27 @@ async def receive_episode_forward(message: Message, state: FSMContext, session: 
         await message.answer(NOT_VIDEO_DURING_FORWARD_TEXT, reply_markup=forwarding_active_keyboard())
         return
 
+    # Non-blocking: unlike movie_add.py's one-shot flow, this loop forwards
+    # many videos back-to-back by design (see module docstring — "no
+    # per-video prompts"), so a duplicate is surfaced as a note rather than
+    # an extra tap that would stall a large batch.
+    duplicate = (
+        await MovieRepository(session).get_by_file_unique_id(sent.video.file_unique_id)
+        if sent.video.file_unique_id
+        else None
+    )
+    duplicate_note = (
+        f"\n⚠️ Eslatma: bu video allaqachon kod <code>{duplicate.code}</code> ostida mavjud."
+        if duplicate is not None
+        else ""
+    )
+
+    # Deterministic (regex-only) extraction of quality/year — pure, no I/O.
+    # Title/season/episode are ignored here: this flow already derives them
+    # from the series/season the admin picked, which is more reliable than
+    # re-parsing each caption independently mid-batch.
+    parsed = extract_deterministic(message.caption or "")
+
     admin = await AdminRepository(session).get_by_user_id(message.from_user.id)
     episode = await SeriesService(session).add_episode(
         season_id=season_id,
@@ -310,6 +333,8 @@ async def receive_episode_forward(message: Message, state: FSMContext, session: 
         file_size=sent.video.file_size,
         is_premium=is_premium,
         created_by=admin.id if admin is not None else None,
+        quality=parsed.quality,
+        year=parsed.year,
     )
 
     await AuditService(session).log(
@@ -321,7 +346,7 @@ async def receive_episode_forward(message: Message, state: FSMContext, session: 
     )
 
     await message.answer(
-        f"✅ {episode.episode_number}-qism qo'shildi (kod: <code>{episode.code}</code>).\n"
+        f"✅ {episode.episode_number}-qism qo'shildi (kod: <code>{episode.code}</code>).{duplicate_note}\n"
         "Keyingi videoni yuboring yoki \"✅ Tugatish\" tugmasini bosing.",
         reply_markup=forwarding_active_keyboard(),
     )

@@ -38,6 +38,12 @@ dev = [
     "ruff>=0.6",
     "aiosqlite>=0.20",
 ]
+# Only for scripts/backfill_channels.py — a one-off userbot script, not part
+# of the bot/API/admin-panel runtime, so this stays out of the main
+# dependency list.
+backfill = [
+    "telethon>=1.36",
+]
 
 [tool.ruff]
 line-length = 100

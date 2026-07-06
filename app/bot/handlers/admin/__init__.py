@@ -2,7 +2,9 @@ from aiogram import Router
 
 from app.bot.handlers.admin import auth as admin_auth
 from app.bot.handlers.admin import broadcast as admin_broadcast
+from app.bot.handlers.admin import category_manage as admin_category_manage
 from app.bot.handlers.admin import channel_add as admin_channel_add
+from app.bot.handlers.admin import channel_ingest as admin_channel_ingest
 from app.bot.handlers.admin import channel_manage as admin_channel_manage
 from app.bot.handlers.admin import movie_add as admin_movie_add
 from app.bot.handlers.admin import movie_manage as admin_movie_manage
@@ -18,8 +20,10 @@ admin_router.include_router(admin_auth.router)
 admin_router.include_router(admin_panel.router)
 admin_router.include_router(admin_movie_add.router)
 admin_router.include_router(admin_movie_manage.router)
+admin_router.include_router(admin_category_manage.router)
 admin_router.include_router(admin_channel_add.router)
 admin_router.include_router(admin_channel_manage.router)
+admin_router.include_router(admin_channel_ingest.router)
 admin_router.include_router(admin_premium_grant.router)
 admin_router.include_router(admin_broadcast.router)
 admin_router.include_router(admin_stats.router)

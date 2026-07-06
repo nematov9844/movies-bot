@@ -32,6 +32,14 @@ def yes_no_keyboard(yes_callback: str, no_callback: str) -> InlineKeyboardMarkup
     )
 
 
+def suggestion_keyboard(accept_callback: str) -> InlineKeyboardMarkup:
+    """One button to accept an auto-parsed suggestion (e.g. a caption-derived title) — the
+    suggested value itself is shown in the prompt text, not the (length-limited) button."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="✅ Taklifni qabul qilish", callback_data=accept_callback)]]
+    )
+
+
 def confirm_keyboard(confirm_callback: str, cancel_callback: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[

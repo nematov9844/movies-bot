@@ -144,6 +144,13 @@ export interface Series {
   is_active: boolean;
 }
 
+export interface Category {
+  id: number;
+  name: string;
+  slug: string;
+  is_active: boolean;
+}
+
 export interface Season {
   id: number;
   series_id: number;

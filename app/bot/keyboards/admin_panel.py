@@ -13,6 +13,7 @@ def admin_panel_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="🎬 Kino qo'shish", callback_data="movie_add")],
             [InlineKeyboardButton(text="📋 Kinolar ro'yxati", callback_data="movie_list_admin")],
+            [InlineKeyboardButton(text="🗂 Kategoriyalar", callback_data="category_menu")],
             [InlineKeyboardButton(text="📺 Seriallar", callback_data="series_menu")],
             [InlineKeyboardButton(text="📢 Kanallar", callback_data="channel_menu")],
             [InlineKeyboardButton(text="⭐ Premium", callback_data="premium_menu")],

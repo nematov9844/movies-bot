@@ -80,6 +80,8 @@ class MovieService:
         created_by: int | None,
         category_ids: list[int] | None = None,
         poster_file_id: str | None = None,
+        quality: str | None = None,
+        year: int | None = None,
     ) -> Movie:
         # Resolve categories *before* creating the row: assigning to
         # ``movie.categories`` after the fact (once the row is persistent)
@@ -101,6 +103,8 @@ class MovieService:
             is_premium=is_premium,
             created_by=created_by,
             categories=categories,
+            quality=quality,
+            year=year,
         )
         return movie
 

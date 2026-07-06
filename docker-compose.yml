@@ -82,6 +82,12 @@ services:
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      # Next.js's standalone server.js binds to $HOSTNAME if set, falling
+      # back to 0.0.0.0 otherwise — but Docker always injects HOSTNAME as
+      # the container's own short ID, which isn't a resolvable DNS name,
+      # so the server crash-loops on "getaddrinfo EAI_AGAIN <container-id>"
+      # unless this is pinned explicitly.
+      HOSTNAME: "0.0.0.0"
     depends_on:
       - api
     ports:
