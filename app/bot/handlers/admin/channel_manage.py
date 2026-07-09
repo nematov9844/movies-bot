@@ -136,7 +136,7 @@ async def open_channel_card(callback: CallbackQuery, session: AsyncSession, stat
     channel = await ChannelService(session).get(channel_id)
     await state.clear()
     if channel is None:
-        await callback.message.edit_text(NOT_FOUND_TEXT)
+        await callback.message.edit_text(NOT_FOUND_TEXT, reply_markup=channel_menu_keyboard())
     else:
         await callback.message.edit_text(_channel_card_text(channel), reply_markup=channel_card_keyboard(channel))
     await callback.answer()
@@ -151,7 +151,7 @@ async def toggle_channel(callback: CallbackQuery, session: AsyncSession) -> None
     channel_id = int(callback.data.removeprefix("chn:toggle:"))
     channel = await ChannelService(session).toggle_active(channel_id)
     if channel is None:
-        await callback.message.edit_text(NOT_FOUND_TEXT)
+        await callback.message.edit_text(NOT_FOUND_TEXT, reply_markup=channel_menu_keyboard())
         await callback.answer()
         return
 
@@ -169,7 +169,7 @@ async def show_channel_stats(callback: CallbackQuery, session: AsyncSession) -> 
     channel_id = int(callback.data.removeprefix("chn:stats:"))
     channel = await ChannelService(session).get(channel_id)
     if channel is None:
-        await callback.message.edit_text(NOT_FOUND_TEXT)
+        await callback.message.edit_text(NOT_FOUND_TEXT, reply_markup=channel_menu_keyboard())
         await callback.answer()
         return
 
@@ -279,7 +279,7 @@ async def receive_channel_edit_value(message: Message, state: FSMContext, sessio
 
     if updated is None:
         await state.clear()
-        await message.answer(NOT_FOUND_TEXT)
+        await message.answer(NOT_FOUND_TEXT, reply_markup=channel_menu_keyboard())
         return
 
     await _log_channel_action(session, user.id, "channel_edit", updated.channel_id)
@@ -302,7 +302,7 @@ async def receive_channel_toggle_value(callback: CallbackQuery, state: FSMContex
         updated = await ChannelService(session).update_channel(channel_id, is_required=value)
 
     if updated is None:
-        await callback.message.edit_text(NOT_FOUND_TEXT)
+        await callback.message.edit_text(NOT_FOUND_TEXT, reply_markup=channel_menu_keyboard())
         await callback.answer()
         return
 
@@ -335,7 +335,7 @@ async def do_delete_channel(callback: CallbackQuery, session: AsyncSession) -> N
     channel_id = int(callback.data.removeprefix("chn:delconfirm:"))
     channel = await ChannelService(session).get(channel_id)
     if channel is None:
-        await callback.message.edit_text(NOT_FOUND_TEXT)
+        await callback.message.edit_text(NOT_FOUND_TEXT, reply_markup=channel_menu_keyboard())
         await callback.answer()
         return
 
@@ -343,7 +343,7 @@ async def do_delete_channel(callback: CallbackQuery, session: AsyncSession) -> N
     await ChannelService(session).delete_channel(channel_id)
     await _log_channel_action(session, callback.from_user.id, "channel_delete", tg_channel_id)
 
-    await callback.message.edit_text(DELETED_TEXT)
+    await callback.message.edit_text(f"{DELETED_TEXT}\n\n{CHANNEL_MENU_TEXT}", reply_markup=channel_menu_keyboard())
     await callback.answer()
     logger.info("channel_deleted", channel_id=tg_channel_id, admin_user_id=callback.from_user.id)
 

@@ -28,24 +28,65 @@ a silently-dropped video.
 """
 
 from aiogram import Bot, F, Router
-from aiogram.types import Message
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, MessageOriginChannel
 from aiogram.types import Video as TgVideo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logger import get_logger
-from app.services.parser.caption_parser import extract_deterministic
+from app.services.parser.caption_parser import CaptionParserService
 from app.services.parser.ingest_service import CaptionIngestService
 
 router = Router(name="admin_channel_ingest")
 logger = get_logger(__name__)
+_parser_service = CaptionParserService(
+    settings.anthropic_api_key,
+    settings.anthropic_model,
+    ollama_base_url=settings.ollama_base_url,
+    ollama_model=settings.ollama_model,
+)
+
+# Source channels whose uploads are known (an explicit call from the owner,
+# not something inferrable from the data itself) to be better quality than
+# whatever from an earlier backfill already occupies that episode slot — an
+# episode-number collision against one of these overwrites the existing row
+# instead of refusing it to a human. Matched as a substring since a forward's
+# origin title is the channel's full display name (emoji, tagline and all),
+# not just its handle.
+_REPLACE_ON_COLLISION_SOURCES = ("anibro",)
+
+
+def _prefers_replace_on_collision(source_channel_title: str | None) -> bool:
+    if not source_channel_title:
+        return False
+    lowered = source_channel_title.lower()
+    return any(name in lowered for name in _REPLACE_ON_COLLISION_SOURCES)
+
 
 FAILURE_DM_TEXT = (
     "⚠️ Avto-parser bu videoni saqlay olmadi (sabab: {reason}).\n"
     "Manba: {source}, xabar ID: {message_id}\n"
     "Caption: {caption}\n"
-    "Iltimos, \"Kino qo'shish\" / \"Seriallar\" orqali qo'lda tekshirib qo'shing."
+    "Videoni ko'rib, kerakli tugmani bosing — qayta forward qilish shart emas:"
 )
+
+
+def _resume_keyboard(storage_message_id: int) -> InlineKeyboardMarkup:
+    """Both callbacks carry the storage channel's own message id — the video
+    is re-fetched from there by id (a forward, not a re-upload) when tapped,
+    so the admin never has to go find and forward it manually."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🎬 Film sifatida qo'shish", callback_data=f"resume:movie:{storage_message_id}"
+                ),
+                InlineKeyboardButton(
+                    text="📺 Serial qismi sifatida", callback_data=f"resume:series:{storage_message_id}"
+                ),
+            ]
+        ]
+    )
 
 
 def _is_configured_source_channel(message: Message) -> bool:
@@ -74,6 +115,7 @@ async def auto_ingest_from_source_channel(message: Message, bot: Bot, session: A
         storage_message_id=sent.message_id,
         source=f"@{message.chat.username}",
         source_message_id=message.message_id,
+        source_channel_title=message.chat.title,
     )
 
 
@@ -81,6 +123,9 @@ async def auto_ingest_from_source_channel(message: Message, bot: Bot, session: A
 async def auto_ingest_from_storage_forward(message: Message, bot: Bot, session: AsyncSession) -> None:
     if message.video is None:
         return
+
+    origin = message.forward_origin
+    source_channel_title = origin.chat.title if isinstance(origin, MessageOriginChannel) else None
 
     await _parse_and_save(
         bot,
@@ -90,6 +135,7 @@ async def auto_ingest_from_storage_forward(message: Message, bot: Bot, session: 
         storage_message_id=message.message_id,
         source="backfill",
         source_message_id=message.message_id,
+        source_channel_title=source_channel_title,
     )
 
 
@@ -102,8 +148,9 @@ async def _parse_and_save(
     storage_message_id: int,
     source: str,
     source_message_id: int,
+    source_channel_title: str | None = None,
 ) -> None:
-    parsed = extract_deterministic(caption or "")
+    parsed = await _parser_service.parse(caption or "")
     result = await CaptionIngestService(session).save(
         parsed,
         file_id=video.file_id,
@@ -111,6 +158,8 @@ async def _parse_and_save(
         storage_message_id=storage_message_id,
         duration=video.duration,
         file_size=video.file_size,
+        source_label=source_channel_title,
+        replace_on_collision=_prefers_replace_on_collision(source_channel_title),
     )
 
     if result.success:
@@ -123,12 +172,16 @@ async def _parse_and_save(
         return
 
     logger.warning("auto_ingest_failed", reason=result.reason, source=source)
-    await bot.send_message(
+    # The video itself, not just a text notice — the admin has to actually
+    # watch it to know what it even is before picking film-vs-episode.
+    await bot.send_video(
         settings.owner_id,
-        FAILURE_DM_TEXT.format(
+        video=video.file_id,
+        caption=FAILURE_DM_TEXT.format(
             reason=result.reason,
             source=source,
             message_id=source_message_id,
             caption=(caption or "(bo'sh)")[:200],
         ),
+        reply_markup=_resume_keyboard(storage_message_id),
     )

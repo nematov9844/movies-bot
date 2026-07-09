@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5"
 
+    # Local Ollama backend — preferred over Anthropic when set (free, no
+    # caption text leaves the machine). E.g. "http://localhost:11434".
+    ollama_base_url: str | None = None
+    ollama_model: str = "qwen3:8b"
+
     # Comma-separated public channel usernames (no "@") the bot auto-relays
     # new video posts from into the storage channel for parsing — e.g. the
     # admin's own movie/anime channels, once the bot is added there as

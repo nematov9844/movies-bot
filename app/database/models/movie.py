@@ -13,6 +13,10 @@ class Movie(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     file_id: Mapped[str] = mapped_column(String(255), nullable=False)
     poster_file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Which upstream Telegram channel this came from (set by the auto-ingest pipeline,
+    # never by an admin) — kept separate from ``description`` so that field stays free
+    # for an actual synopsis without the two colliding.
+    source_channel: Mapped[str | None] = mapped_column(String(255), nullable=True)
     file_unique_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     storage_message_id: Mapped[int | None] = mapped_column(BIGINT, nullable=True)
     duration: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -14,6 +14,7 @@ def settings_menu_text(
     premium: bool,
     welcome_text: str,
     support_username: str,
+    payment_details: str,
 ) -> str:
     return (
         "⚙️ <b>Sozlamalar</b>\n\n"
@@ -21,7 +22,8 @@ def settings_menu_text(
         f"📢 Majburiy obuna: {_status(force_subscribe)}\n"
         f"⭐ Premium tizimi: {_status(premium)}\n\n"
         f"💬 Salomlashuv matni:\n{welcome_text}\n\n"
-        f"🆘 Qo'llab-quvvatlash: {support_username}"
+        f"🆘 Qo'llab-quvvatlash: {support_username}\n\n"
+        f"💳 To'lov rekvizitlari (foydalanuvchiga ko'rsatiladi):\n{payment_details}"
     )
 
 
@@ -52,6 +54,7 @@ def settings_menu_keyboard(*, maintenance: bool, force_subscribe: bool, premium:
             ],
             [InlineKeyboardButton(text="✏️ Salomlashuv matni", callback_data="stg:edit:welcome_text")],
             [InlineKeyboardButton(text="✏️ Support username", callback_data="stg:edit:support_username")],
+            [InlineKeyboardButton(text="✏️ To'lov rekvizitlari", callback_data="stg:edit:payment_details")],
             [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="stg:panel")],
         ]
     )

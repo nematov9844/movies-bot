@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.filters import HasPermission
@@ -99,7 +99,12 @@ async def start_grant_premium(callback: CallbackQuery, state: FSMContext) -> Non
     await state.clear()
     await state.set_state(GrantPremiumStates.waiting_for_user_id)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(USER_ID_PROMPT)
+        await callback.message.edit_text(
+            USER_ID_PROMPT,
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="❌ Bekor qilish", callback_data="premium_menu")]]
+            ),
+        )
     await callback.answer()
 
 
@@ -120,12 +125,43 @@ async def receive_target_user_id(message: Message, state: FSMContext, session: A
     plans = await PremiumService(session).list_active_plans()
     if not plans:
         await state.clear()
-        await message.answer(NO_PLANS_TEXT)
+        await message.answer(NO_PLANS_TEXT, reply_markup=premium_menu_keyboard())
         return
 
     await state.update_data(target_user_id=target_user_id)
     await state.set_state(GrantPremiumStates.waiting_for_plan)
     await message.answer(PLAN_PROMPT, reply_markup=premium_plans_keyboard(plans, _PLAN_CALLBACK_PREFIX))
+
+
+@router.callback_query(F.data.startswith("prmg:quick:"), HasPermission(Permission.GRANT_PREMIUM))
+async def quick_grant_from_notification(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    """One-tap path straight from the purchase-intent DM (see ``premium.py``'s
+    admin notification) — skips retyping the user id and re-picking the plan,
+    since the notification already names both."""
+    if callback.data is None or not isinstance(callback.message, Message):
+        await callback.answer()
+        return
+
+    target_user_id_str, plan_id_str = callback.data.removeprefix("prmg:quick:").split(":")
+    target_user_id, plan_id = int(target_user_id_str), int(plan_id_str)
+
+    premium_service = PremiumService(session)
+    plan = await premium_service.get_plan(plan_id)
+    if plan is None:
+        await callback.answer(PLAN_NOT_FOUND_TEXT, show_alert=True)
+        return
+    if await UserRepository(session).get(target_user_id) is None:
+        await callback.answer(USER_NOT_FOUND_TEXT, show_alert=True)
+        return
+
+    current = await premium_service.get_active(target_user_id)
+    await state.clear()
+    await state.update_data(target_user_id=target_user_id, plan_id=plan_id)
+    await state.set_state(GrantPremiumStates.waiting_for_confirm)
+    await callback.message.edit_text(
+        _confirm_text(target_user_id, plan, current), reply_markup=confirm_keyboard(_CONFIRM, _CANCEL)
+    )
+    await callback.answer()
 
 
 @router.callback_query(
@@ -175,7 +211,7 @@ async def confirm_grant_premium(
     plan = await premium_service.get_plan(plan_id)
     if plan is None:
         await state.clear()
-        await callback.message.edit_text(PLAN_NOT_FOUND_TEXT)
+        await callback.message.edit_text(PLAN_NOT_FOUND_TEXT, reply_markup=premium_menu_keyboard())
         await callback.answer()
         return
 
@@ -197,7 +233,8 @@ async def confirm_grant_premium(
     await state.clear()
     await callback.message.edit_text(
         f"✅ Premium berildi.\n\n🆔 Foydalanuvchi: <code>{target_user_id}</code>\n"
-        f"📅 Amal qilish muddati: {_humanize(premium_user.expires_at)} gacha"
+        f"📅 Amal qilish muddati: {_humanize(premium_user.expires_at)} gacha",
+        reply_markup=premium_menu_keyboard(),
     )
     await callback.answer()
     logger.info(
@@ -224,5 +261,5 @@ async def confirm_grant_premium(
 async def cancel_grant_premium(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(CANCELLED_TEXT)
+        await callback.message.edit_text(CANCELLED_TEXT, reply_markup=premium_menu_keyboard())
     await callback.answer()

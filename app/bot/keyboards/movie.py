@@ -52,9 +52,12 @@ def confirm_keyboard(confirm_callback: str, cancel_callback: str) -> InlineKeybo
 
 
 def movie_detail_keyboard(code: str) -> InlineKeyboardMarkup:
-    """The one-button "🎬 Kinoni olish" card shown before actual delivery — see ``mv:detail:{code}``."""
+    """The "🎬 Kinoni olish" card shown before actual delivery — see ``mv:detail:{code}``."""
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="🎬 Kinoni olish", callback_data=f"mv:deliver:{code}")]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🎬 Kinoni olish", callback_data=f"mv:deliver:{code}")],
+            [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="mv:browse")],
+        ]
     )
 
 
@@ -98,6 +101,7 @@ def edit_field_keyboard(code: str) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="📝 Nomi", callback_data=f"mmg:editf:{code}:title")],
             [InlineKeyboardButton(text="📄 Tavsif", callback_data=f"mmg:editf:{code}:description")],
+            [InlineKeyboardButton(text="🖼 Poster", callback_data=f"mmg:editf:{code}:poster")],
             [InlineKeyboardButton(text="🗂 Kategoriyalar", callback_data=f"mmg:editf:{code}:categories")],
             [InlineKeyboardButton(text="⭐ Premium", callback_data=f"mmg:editf:{code}:premium")],
             [InlineKeyboardButton(text="✅ Faollik", callback_data=f"mmg:editf:{code}:active")],

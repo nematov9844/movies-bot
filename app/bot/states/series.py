@@ -9,3 +9,6 @@ class SeriesManageStates(StatesGroup):
     waiting_for_season_number = State()
     waiting_for_season_premium_choice = State()
     waiting_for_episode_forward = State()
+    waiting_for_gap_video = State()
+    waiting_for_gap_episode_number = State()
+    waiting_for_series_poster = State()

@@ -73,6 +73,12 @@ POPULAR_MOVIES_WINDOW_DAYS = 7
 # Force-subscribe module (Phase 7)
 FORCE_SUB_CACHE_TTL_SECONDS = 60
 PENDING_UPDATE_TTL_SECONDS = 600
+# A misconfigured/inaccessible required channel silently stops being
+# enforced (see ForceSubscribeService._is_member) — this rate-limits the
+# owner alert about it to at most once per channel per hour instead of once
+# per failed membership check.
+REDIS_KEY_FORCE_SUB_ALERT = "fs:alert:{channel_id}"
+FORCE_SUB_ALERT_TTL_SECONDS = 3600
 
 # Statistics module (Phase 10)
 STATS_TOP_LIMIT = 10

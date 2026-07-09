@@ -42,7 +42,8 @@ async def deliver_movie(bot: Bot, session: AsyncSession, chat_id: int, user_id: 
         return
 
     bot_info = await bot.get_me()
-    caption = f"🎬 <b>{movie.title}</b>\n\n{movie.description or ''}\n\n🤖 @{bot_info.username}"
+    source_line = f"📡 Manba: {movie.source_channel}\n\n" if movie.source_channel else ""
+    caption = f"🎬 <b>{movie.title}</b>\n\n{movie.description or ''}\n\n{source_line}🤖 @{bot_info.username}"
     await bot.send_video(chat_id=chat_id, video=movie.file_id, caption=caption)
     await service.record_view(movie.id, user_id)
     logger.info("movie_delivered", movie_code=movie.code, user_id=user_id)

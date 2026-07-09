@@ -9,7 +9,10 @@ from app.database.models import Category
 
 def category_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="➕ Kategoriya qo'shish", callback_data="cat:new")]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Kategoriya qo'shish", callback_data="cat:new")],
+            [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="cat:panel")],
+        ]
     )
 
 
@@ -24,6 +27,7 @@ def category_management_list_keyboard(categories: Sequence[Category]) -> InlineK
         for category in categories
     ]
     rows.append([InlineKeyboardButton(text="➕ Kategoriya qo'shish", callback_data="cat:new")])
+    rows.append([InlineKeyboardButton(text="⬅️ Orqaga", callback_data="cat:panel")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

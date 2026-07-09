@@ -10,10 +10,12 @@ from typing import Any
 
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.filters import HasPermission
+from app.bot.handlers.admin.panel import PANEL_TEXT
+from app.bot.keyboards.admin_panel import admin_panel_keyboard
 from app.bot.keyboards.movie import (
     category_picker_keyboard,
     confirm_keyboard,
@@ -47,6 +49,18 @@ _CANCEL_CALLBACK = "madd:cancel"
 _DUPLICATE_CONTINUE_CALLBACK = "madd:dup:continue"
 _DUPLICATE_CANCEL_CALLBACK = "madd:dup:cancel"
 _TITLE_SUGGESTION_ACCEPT_CALLBACK = "madd:title_suggest"
+_ABORT_CALLBACK = "madd:abort"
+
+
+def _abort_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Bekor qilish", callback_data=_ABORT_CALLBACK)]])
+
+
+def _with_abort_row(keyboard: InlineKeyboardMarkup) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[*keyboard.inline_keyboard, [InlineKeyboardButton(text="❌ Bekor qilish", callback_data=_ABORT_CALLBACK)]]
+    )
+
 
 VIDEO_PROMPT = "🎬 Kino videosini yuboring."
 NOT_VIDEO_TEXT = "❌ Bu video emas. Iltimos, kino videosini yuboring."
@@ -116,7 +130,15 @@ async def start_add_movie(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(AddMovieStates.waiting_for_video)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(VIDEO_PROMPT)
+        await callback.message.edit_text(VIDEO_PROMPT, reply_markup=_abort_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data == _ABORT_CALLBACK, HasPermission(Permission.MANAGE_MOVIES))
+async def abort_add_movie(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(f"{CANCELLED_TEXT}\n\n{PANEL_TEXT}", reply_markup=admin_panel_keyboard())
     await callback.answer()
 
 
@@ -168,7 +190,7 @@ async def receive_video(message: Message, state: FSMContext, bot: Bot, session: 
         return
 
     await state.set_state(AddMovieStates.waiting_for_code)
-    await message.answer(CODE_PROMPT)
+    await message.answer(CODE_PROMPT, reply_markup=_abort_keyboard())
 
 
 @router.callback_query(
@@ -179,7 +201,7 @@ async def receive_video(message: Message, state: FSMContext, bot: Bot, session: 
 async def continue_after_duplicate_warning(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AddMovieStates.waiting_for_code)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(CODE_PROMPT)
+        await callback.message.edit_text(CODE_PROMPT, reply_markup=_abort_keyboard())
     await callback.answer()
 
 
@@ -191,7 +213,7 @@ async def continue_after_duplicate_warning(callback: CallbackQuery, state: FSMCo
 async def cancel_after_duplicate_warning(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(CANCELLED_TEXT)
+        await callback.message.edit_text(f"{CANCELLED_TEXT}\n\n{PANEL_TEXT}", reply_markup=admin_panel_keyboard())
     await callback.answer()
 
 
@@ -218,10 +240,10 @@ async def receive_code(message: Message, state: FSMContext, session: AsyncSessio
     if suggested_title:
         await message.answer(
             f"{TITLE_PROMPT}\n\n{TITLE_SUGGESTION_TEXT.format(title=suggested_title)}",
-            reply_markup=suggestion_keyboard(_TITLE_SUGGESTION_ACCEPT_CALLBACK),
+            reply_markup=_with_abort_row(suggestion_keyboard(_TITLE_SUGGESTION_ACCEPT_CALLBACK)),
         )
     else:
-        await message.answer(TITLE_PROMPT)
+        await message.answer(TITLE_PROMPT, reply_markup=_abort_keyboard())
 
 
 @router.message(AddMovieStates.waiting_for_title, HasPermission(Permission.MANAGE_MOVIES))
@@ -233,7 +255,7 @@ async def receive_title(message: Message, state: FSMContext) -> None:
 
     await state.update_data(title=title)
     await state.set_state(AddMovieStates.waiting_for_description)
-    await message.answer(DESCRIPTION_PROMPT, reply_markup=skip_keyboard(_DESCRIPTION_SKIP_CALLBACK))
+    await message.answer(DESCRIPTION_PROMPT, reply_markup=_with_abort_row(skip_keyboard(_DESCRIPTION_SKIP_CALLBACK)))
 
 
 @router.callback_query(
@@ -250,7 +272,9 @@ async def accept_title_suggestion(callback: CallbackQuery, state: FSMContext) ->
 
     await state.update_data(title=suggested_title)
     await state.set_state(AddMovieStates.waiting_for_description)
-    await callback.message.edit_text(DESCRIPTION_PROMPT, reply_markup=skip_keyboard(_DESCRIPTION_SKIP_CALLBACK))
+    await callback.message.edit_text(
+        DESCRIPTION_PROMPT, reply_markup=_with_abort_row(skip_keyboard(_DESCRIPTION_SKIP_CALLBACK))
+    )
     await callback.answer()
 
 
@@ -364,7 +388,10 @@ async def confirm_add(callback: CallbackQuery, state: FSMContext, session: Async
 
     await state.clear()
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(f"✅ Kino qo'shildi. Kod: <code>{movie.code}</code>")
+        await callback.message.edit_text(
+            f"✅ Kino qo'shildi. Kod: <code>{movie.code}</code>\n\n{PANEL_TEXT}",
+            reply_markup=admin_panel_keyboard(),
+        )
     await callback.answer()
     logger.info("movie_added", code=movie.code, admin_user_id=user.id)
 
@@ -378,5 +405,5 @@ async def cancel_add(callback: CallbackQuery, state: FSMContext) -> None:
     # is harmless, so there's nothing to roll back there.
     await state.clear()
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(CANCELLED_TEXT)
+        await callback.message.edit_text(f"{CANCELLED_TEXT}\n\n{PANEL_TEXT}", reply_markup=admin_panel_keyboard())
     await callback.answer()

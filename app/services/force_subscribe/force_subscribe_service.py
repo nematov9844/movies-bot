@@ -10,6 +10,7 @@ exercised directly in tests without a database or Redis, per the TZ's call
 for individual coverage of each of its 5 conditions.
 """
 
+import contextlib
 from collections.abc import Iterable
 from datetime import UTC, datetime, time
 from zoneinfo import ZoneInfo
@@ -19,10 +20,13 @@ from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import TelegramAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.constants import (
+    FORCE_SUB_ALERT_TTL_SECONDS,
     FORCE_SUB_CACHE_TTL_SECONDS,
     REDIS_KEY_CHANNEL_JOINED,
     REDIS_KEY_FORCE_SUB,
+    REDIS_KEY_FORCE_SUB_ALERT,
 )
 from app.core.logger import get_logger
 from app.database.models import Channel
@@ -156,11 +160,29 @@ class ForceSubscribeService:
                 user_id=user_id,
                 error=str(exc),
             )
+            await self._alert_owner_of_check_failure(channel, exc)
             return None
 
         subscribed = member.status in _SUBSCRIBED_STATUSES
         await redis.set(cache_key, "1" if subscribed else "0", ex=FORCE_SUB_CACHE_TTL_SECONDS)
         return subscribed
+
+    async def _alert_owner_of_check_failure(self, channel: Channel, exc: Exception) -> None:
+        """A broken channel check means that channel silently stops being
+        enforced for *every* user (see ``_is_member``'s docstring) — without
+        this, the only trace is a backend log line no admin would ever see.
+        Rate-limited to one DM per channel per hour, not per failed check."""
+        redis = get_redis()
+        alert_key = REDIS_KEY_FORCE_SUB_ALERT.format(channel_id=channel.channel_id)
+        if not await redis.set(alert_key, "1", nx=True, ex=FORCE_SUB_ALERT_TTL_SECONDS):
+            return
+        with contextlib.suppress(TelegramAPIError):
+            await self._bot.send_message(
+                settings.owner_id,
+                f"⚠️ Majburiy obuna: \"{channel.title}\" kanalini tekshirib bo'lmadi ({exc}).\n"
+                "Ehtimol bot bu kanalda admin emas yoki kanal o'chirilgan. Muammo hal "
+                "bo'lgunicha bu kanal hech kim uchun majburiy obunaga hisoblanmaydi.",
+            )
 
     async def clear_membership_cache(self, user_id: int, channels: Iterable[Channel]) -> None:
         """Invalidate the 60s cached membership result for ``user_id`` across ``channels``.

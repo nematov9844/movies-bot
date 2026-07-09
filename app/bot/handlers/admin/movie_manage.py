@@ -9,7 +9,7 @@ import re
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.filters import HasPermission
@@ -42,6 +42,9 @@ _FIELD_PROMPTS: dict[str, str] = {
     "description": '📄 Yangi tavsifni kiriting (tozalash uchun "-" yuboring):',
     "code": "🔑 Yangi kodni kiriting:",
 }
+
+POSTER_PROMPT = "🖼 Poster rasmini yuboring:"
+POSTER_NOT_A_PHOTO_TEXT = "❌ Iltimos, rasm (photo) yuboring, matn emas:"
 
 FIND_PROMPT = "🔎 Qidirilayotgan kino kodini kiriting:"
 NOT_FOUND_TEXT = "❌ Bunday kodli kino topilmadi. Qayta urinib ko'ring:"
@@ -88,7 +91,7 @@ async def _log_movie_action(session: AsyncSession, user_id: int, action: str, co
 async def _start_category_edit(message: Message, state: FSMContext, session: AsyncSession, code: str) -> None:
     movie = await MovieRepository(session).get_by_code(code)
     if movie is None:
-        await message.edit_text(NOT_FOUND_TEXT)
+        await message.edit_text(NOT_FOUND_TEXT, reply_markup=admin_panel_keyboard())
         return
 
     categories = await CategoryRepository(session).list_active()
@@ -112,7 +115,12 @@ async def start_find_movie(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(MovieManageStates.waiting_for_code)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(FIND_PROMPT)
+        await callback.message.edit_text(
+            FIND_PROMPT,
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="⬅️ Bekor qilish", callback_data="mmg:back")]]
+            ),
+        )
     await callback.answer()
 
 
@@ -138,7 +146,7 @@ async def open_card(callback: CallbackQuery, state: FSMContext, session: AsyncSe
     movie = await MovieRepository(session).get_by_code(code)
     await state.clear()
     if movie is None:
-        await callback.message.edit_text(NOT_FOUND_TEXT)
+        await callback.message.edit_text(NOT_FOUND_TEXT, reply_markup=admin_panel_keyboard())
     else:
         await callback.message.edit_text(_movie_card_text(movie), reply_markup=movie_card_keyboard(movie.code))
     await callback.answer()
@@ -185,8 +193,43 @@ async def choose_edit_field(callback: CallbackQuery, state: FSMContext, session:
         )
     elif field == "categories":
         await _start_category_edit(callback.message, state, session, code)
+    elif field == "poster":
+        await state.set_state(MovieManageStates.waiting_for_poster)
+        await state.update_data(edit_code=code)
+        await callback.message.edit_text(POSTER_PROMPT)
 
     await callback.answer()
+
+
+@router.message(MovieManageStates.waiting_for_poster, F.photo, HasPermission(Permission.MANAGE_MOVIES))
+async def receive_poster(message: Message, state: FSMContext, session: AsyncSession) -> None:
+    user = message.from_user
+    if user is None or message.photo is None:
+        return
+
+    data = await state.get_data()
+    code: str = data["edit_code"]
+
+    movie = await MovieRepository(session).get_by_code(code)
+    if movie is None:
+        await state.clear()
+        await message.answer(NOT_FOUND_TEXT)
+        return
+
+    updated = await MovieService(session).update_movie(movie.id, poster_file_id=message.photo[-1].file_id)
+    if updated is None:
+        await state.clear()
+        await message.answer(NOT_FOUND_TEXT)
+        return
+
+    await _log_movie_action(session, user.id, "movie_edit", updated.code)
+    await state.clear()
+    await message.answer(_movie_card_text(updated), reply_markup=movie_card_keyboard(updated.code))
+
+
+@router.message(MovieManageStates.waiting_for_poster, HasPermission(Permission.MANAGE_MOVIES))
+async def receive_poster_wrong_type(message: Message) -> None:
+    await message.answer(POSTER_NOT_A_PHOTO_TEXT)
 
 
 @router.message(MovieManageStates.waiting_for_edit_value, HasPermission(Permission.MANAGE_MOVIES))
@@ -281,7 +324,7 @@ async def finish_edit_categories(callback: CallbackQuery, state: FSMContext, ses
     movie = await MovieRepository(session).get_by_code(code)
     await state.clear()
     if movie is None:
-        await callback.message.edit_text(NOT_FOUND_TEXT)
+        await callback.message.edit_text(NOT_FOUND_TEXT, reply_markup=admin_panel_keyboard())
         await callback.answer()
         return
 
@@ -342,14 +385,14 @@ async def do_delete(callback: CallbackQuery, session: AsyncSession) -> None:
     code = callback.data.removeprefix("mmg:delconfirm:")
     movie = await MovieRepository(session).get_by_code(code)
     if movie is None:
-        await callback.message.edit_text(NOT_FOUND_TEXT)
+        await callback.message.edit_text(NOT_FOUND_TEXT, reply_markup=admin_panel_keyboard())
         await callback.answer()
         return
 
     await MovieService(session).delete_movie(movie.id)
     await _log_movie_action(session, callback.from_user.id, "movie_delete", code)
 
-    await callback.message.edit_text(DELETED_TEXT)
+    await callback.message.edit_text(f"{DELETED_TEXT}\n\n{PANEL_TEXT}", reply_markup=admin_panel_keyboard())
     await callback.answer()
     logger.info("movie_deleted", code=code, admin_user_id=callback.from_user.id)
 

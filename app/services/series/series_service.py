@@ -35,10 +35,18 @@ class SeriesService:
     # --- Series ---------------------------------------------------------
 
     async def create_series(
-        self, title: str, description: str | None = None, poster_file_id: str | None = None
+        self,
+        title: str,
+        description: str | None = None,
+        poster_file_id: str | None = None,
+        source_channel: str | None = None,
     ) -> Series:
         return await self._series_repo.create(
-            title=title, description=description, poster_file_id=poster_file_id, is_active=True
+            title=title,
+            description=description,
+            poster_file_id=poster_file_id,
+            source_channel=source_channel,
+            is_active=True,
         )
 
     async def search_series(self, query: str, limit: int, offset: int) -> tuple[list[Series], int]:
@@ -135,6 +143,8 @@ class SeriesService:
         quality: str | None = None,
         year: int | None = None,
         episode_number: int | None = None,
+        description: str | None = None,
+        source_channel: str | None = None,
     ) -> Movie:
         """Appends an episode to a season.
 
@@ -155,6 +165,7 @@ class SeriesService:
         return await self._movie_repo.create(
             code=code,
             title=f"{series_title} — {season_number}-fasl, {episode_number}-qism",
+            description=description,
             file_id=file_id,
             file_unique_id=file_unique_id,
             storage_message_id=storage_message_id,
@@ -167,6 +178,7 @@ class SeriesService:
             created_by=created_by,
             quality=quality,
             year=year,
+            source_channel=source_channel,
         )
 
     async def list_episodes(self, season_id: int, limit: int, offset: int) -> tuple[list[Movie], int]:

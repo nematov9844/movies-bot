@@ -17,10 +17,19 @@ from aiogram import Bot, F, Router
 from aiogram.enums import ChatMemberStatus, ChatType
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Chat, ChatFullInfo, Message, MessageOriginChannel
+from aiogram.types import (
+    CallbackQuery,
+    Chat,
+    ChatFullInfo,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    MessageOriginChannel,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.filters import HasPermission
+from app.bot.keyboards.channel import channel_menu_keyboard
 from app.bot.keyboards.movie import confirm_keyboard, skip_keyboard
 from app.bot.states.channel import AddChannelStates
 from app.core.logger import get_logger
@@ -130,7 +139,12 @@ async def start_add_channel(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(AddChannelStates.waiting_for_channel)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(CHANNEL_PROMPT)
+        await callback.message.edit_text(
+            CHANNEL_PROMPT,
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="❌ Bekor qilish", callback_data="channel_menu")]]
+            ),
+        )
     await callback.answer()
 
 
@@ -329,7 +343,10 @@ async def confirm_add_channel(callback: CallbackQuery, state: FSMContext, sessio
 
     await state.clear()
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(CHANNEL_ADDED_TEXT)
+        await callback.message.edit_text(
+            f"{CHANNEL_ADDED_TEXT}\n\n📢 <b>Kanallar</b>\n\nKerakli amalni tanlang:",
+            reply_markup=channel_menu_keyboard(),
+        )
     await callback.answer()
     logger.info("channel_added", channel_id=channel.channel_id, admin_user_id=callback.from_user.id)
 
@@ -340,5 +357,8 @@ async def confirm_add_channel(callback: CallbackQuery, state: FSMContext, sessio
 async def cancel_add_channel(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(CANCELLED_TEXT)
+        await callback.message.edit_text(
+            f"{CANCELLED_TEXT}\n\n📢 <b>Kanallar</b>\n\nKerakli amalni tanlang:",
+            reply_markup=channel_menu_keyboard(),
+        )
     await callback.answer()

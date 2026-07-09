@@ -31,11 +31,20 @@ Telegram `file_id` turadi.
 
 ### Admin uchun (bot, `/panel`)
 
-- **Kino qo'shish/tahrirlash/o'chirish** (kategoriya, premium belgisi bilan).
+- **Kino qo'shish/tahrirlash/o'chirish** (kategoriya, premium belgisi bilan,
+  poster — botga rasm yuborish bilan, `file_id` qo'lda kiritish shart emas).
 - **Seriallar** — yangi serial va fasl yaratish, so'ng videolarni birma-bir
   forward qilib qismlarni ommaviy qo'shish (kod/nom avtomatik generatsiya
-  qilinadi, admin hech narsa yozmaydi); fasl/serial nomini tahrirlash,
-  o'chirish.
+  qilinadi, admin hech narsa yozmaydi); fasl/serial nomini, poster
+  rasmini tahrirlash, o'chirish; qismlari to'liq bo'lmagan fasllar uchun
+  "yetishmayotgan qismni to'ldirish" (aniq qism raqami so'raladi).
+- **Kanaldan avtomatik qo'shish** (`SOURCE_CHANNELS`) — bot admin bo'lgan
+  kanal(lar)ga yangi video tushishi bilanoq caption'dan nom/fasl/qism
+  avtomatik o'qib, bazaga qo'shadi (regex + ixtiyoriy AI-fallback — Ollama
+  yoki Anthropic). Caption'dan hech narsa aniq o'qilmasa (nom yo'q, qism
+  raqami noaniq), hech narsani "taxmin qilib" saqlamaydi — video bilan
+  birga owner'ga DM yuborib, bitta tugma bosish bilan qo'lda hal qilish
+  imkonini beradi.
 - **Kanallar (force-subscribe)** — kanal qo'shish/tahrirlash/o'chirish,
   yoqish-o'chirish, muddat/vaqt oynasi/join-limit sozlash.
 - **Premium berish** — foydalanuvchiga qo'lda premium reja berish.
@@ -126,6 +135,65 @@ kiring. Lokalda panelni sinash uchun `.env`ga qo'shing:
 ```
 CORS_ORIGINS=http://localhost:3000
 ```
+
+## Serverga tezkor joylashtirish (faqat bot)
+
+Web admin panel/API/nginx/SSL kerak bo'lmagan, **faqat Telegram bot**ni
+ishga tushirish uchun eng qisqa yo'l — domen, sertifikat, ochiq port kerak
+emas (bot Telegram API'ga o'zi tashqariga ulanadi, hech narsa "kirish"ni
+kutmaydi).
+
+```bash
+# 1) Serverga Docker o'rnatish (bo'sh server bo'lsa)
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER && newgrp docker
+
+# 2) Kodni olib kelish
+git clone https://github.com/<username>/movie-platform.git
+cd movie-platform
+
+# 3) .env sozlash — kamida BOT_TOKEN, STORAGE_CHANNEL_ID, OWNER_ID,
+#    POSTGRES_PASSWORD, JWT_SECRET to'ldirilishi shart (JWT_SECRET API
+#    ishlamasa ham Settings modeli talab qiladi — bo'sh qoldirmang)
+cp .env.example .env
+nano .env
+
+# 4) Faqat kerakli servicelarni ko'tarish (api/admin-panel/nginx'siz)
+docker compose up -d --build postgres redis migrations bot
+```
+
+Mavjud ma'lumotlar bilan ishga tushirish uchun (eski serverdan/lokaldan
+"huddi shu data" ko'chirilyapti bo'lsa), yuqoridagi 4-qadamdan **oldin**:
+
+```bash
+# Eski joydan (lokal/eski server, .env shu yerda ham to'ldirilgan bo'lishi
+# kerak) — POSTGRES_HOST=localhost kerak, chunki bu hostning o'zidan
+# ishga tushyapti, .env dagi "postgres" esa faqat compose tarmog'i ichida
+# ishlaydi:
+POSTGRES_HOST=localhost ./scripts/backup.sh   # backups/db_YYYY-MM-DD.dump.gz yaratadi
+
+# Faylni yangi serverga ko'chiring (masalan scp bilan), so'ng u yerda:
+docker compose up -d postgres redis   # avval faqat bazani ko'tarish
+docker compose exec -T postgres pg_isready -U movie   # tayyor bo'lguncha kutish
+POSTGRES_HOST=localhost ./scripts/restore.sh backups/db_2026-01-01.dump.gz -y
+docker compose up -d --build migrations bot   # keyin qolganini ko'tarish
+```
+
+Tekshirish: Telegram'da botga `/start` yuboring — javob qaytishi kerak.
+
+**Ollama (ixtiyoriy, AI-yordamchi caption-parser uchun):** agar shu
+serverda Ollama ham ishlab tursa (`ollama serve`, `127.0.0.1:11434`), `bot`
+servisi `network_mode: host` bilan ishlaydi — shu sababli Ollama'ning o'zi
+hech qachon `127.0.0.1`dan tashqariga ochilmasa ham bot unga ulana oladi.
+`.env`da `OLLAMA_BASE_URL=http://127.0.0.1:11434` qo'ying. Agar bu serverda
+Ollama bo'lmasa, shunchaki bo'sh qoldiring — hech narsa buzilmaydi, faqat
+AI-fallback bosqichi ishlamaydi (regex asosidagi parser barcha holatda
+ishlayveradi).
+
+Keyinchalik web panel/API kerak bo'lsa, pastdagi "Serverga to'liq
+joylashtirish" bo'limiga o'ting — u yerdagi qadamlar shu bazani (allaqachon
+ishga tushirilgan `postgres`ni) qayta ishlatadi, hech narsani qayta
+boshlash shart emas.
 
 ## Serverga to'liq joylashtirish (GitHub orqali)
 

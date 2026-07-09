@@ -39,6 +39,7 @@ def series_card_keyboard(series_id: int, seasons: Sequence[Season]) -> InlineKey
         for season in seasons
     ]
     rows.append([InlineKeyboardButton(text="➕ Fasl qo'shish", callback_data=f"series:season_new:{series_id}")])
+    rows.append([InlineKeyboardButton(text="🖼 Poster qo'shish", callback_data=f"series:poster:{series_id}")])
     rows.append([InlineKeyboardButton(text="🗑 Serialni o'chirish", callback_data=f"series:delete:{series_id}")])
     rows.append([InlineKeyboardButton(text="⬅️ Orqaga", callback_data="series:list")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -127,6 +128,7 @@ def episode_list_keyboard(
     *,
     page: int,
     total_pages: int,
+    series_id: int,
 ) -> InlineKeyboardMarkup:
     """Tap-to-deliver episode grid, reusing the existing ``mv:deliver:{code}`` delivery callback."""
     buttons = [
@@ -138,4 +140,7 @@ def episode_list_keyboard(
         nav_row = _pagination_row(page, total_pages, f"mv:ep_page:{season_id}:{{page}}")
         if nav_row:
             rows.append(nav_row)
+    # Without this, landing on the wrong season's episode list is a dead end —
+    # the only way back to pick a different season was to re-search from scratch.
+    rows.append([InlineKeyboardButton(text="⬅️ Fasllarga qaytish", callback_data=f"mv:series:{series_id}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)

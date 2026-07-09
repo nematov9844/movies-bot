@@ -39,9 +39,9 @@ def make_message(
 
 
 def make_video(
-    *, file_id: str = "video-file-id", file_unique_id: str = "video-unique-id"
+    *, file_id: str = "video-file-id", file_unique_id: str = "video-unique-id", duration: int = 1400
 ) -> Video:
-    return Video(file_id=file_id, file_unique_id=file_unique_id, width=1280, height=720, duration=120)
+    return Video(file_id=file_id, file_unique_id=file_unique_id, width=1280, height=720, duration=duration)
 
 
 def make_channel_post(
@@ -51,6 +51,7 @@ def make_channel_post(
     caption: str | None = None,
     video: Video | None = None,
     forwarded: bool = False,
+    origin_chat_title: str | None = None,
     message_id: int = 1,
     bot: AsyncMock | None = None,
 ) -> tuple[Message, AsyncMock]:
@@ -58,8 +59,9 @@ def make_channel_post(
     the channel, not a user), optionally carrying a video and/or genuine forward metadata."""
     bot = bot or make_bot()
     chat = Chat(id=chat_id, type="channel", username=chat_username)
+    origin_chat = Chat(id=chat_id - 1, type="channel", title=origin_chat_title) if origin_chat_title else chat
     forward_origin = (
-        MessageOriginChannel(date=datetime.now(UTC), chat=chat, message_id=message_id)
+        MessageOriginChannel(date=datetime.now(UTC), chat=origin_chat, message_id=message_id)
         if forwarded
         else None
     )

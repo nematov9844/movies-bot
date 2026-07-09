@@ -52,6 +52,7 @@ class MovieCard:
     # existed, still live for up to its 1h TTL) deserializes fine instead of
     # raising a TypeError for a missing kwarg.
     poster_file_id: str | None = None
+    source_channel: str | None = None
 
 
 class MovieService:
@@ -82,6 +83,7 @@ class MovieService:
         poster_file_id: str | None = None,
         quality: str | None = None,
         year: int | None = None,
+        source_channel: str | None = None,
     ) -> Movie:
         # Resolve categories *before* creating the row: assigning to
         # ``movie.categories`` after the fact (once the row is persistent)
@@ -105,6 +107,7 @@ class MovieService:
             categories=categories,
             quality=quality,
             year=year,
+            source_channel=source_channel,
         )
         return movie
 
@@ -208,6 +211,7 @@ class MovieService:
             is_premium=movie.is_premium,
             is_active=movie.is_active,
             poster_file_id=movie.poster_file_id,
+            source_channel=movie.source_channel,
         )
         await redis.set(key, json.dumps(asdict(card)), ex=MOVIE_CODE_CACHE_TTL_SECONDS)
         return card

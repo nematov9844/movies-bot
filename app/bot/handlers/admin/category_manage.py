@@ -9,7 +9,7 @@ that's all ``Category`` has beyond its auto-derived slug.
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.filters import HasPermission
@@ -86,7 +86,12 @@ async def list_categories(callback: CallbackQuery, state: FSMContext, session: A
 async def start_new_category(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(CategoryManageStates.waiting_for_name)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(NAME_PROMPT)
+        await callback.message.edit_text(
+            NAME_PROMPT,
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="⬅️ Bekor qilish", callback_data="cat:list")]]
+            ),
+        )
     await callback.answer()
 
 

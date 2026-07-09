@@ -21,6 +21,7 @@ import time
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError, TelegramRetryAfter
 
+from app.bot.keyboards.admin_panel import admin_panel_keyboard
 from app.bot.keyboards.broadcast import broadcast_progress_keyboard, format_progress_text
 from app.core.constants import BROADCAST_MESSAGES_PER_SECOND
 from app.core.constants import REDIS_KEY_BROADCAST_LOCK as _LOCK_KEY
@@ -117,7 +118,7 @@ async def _edit_progress(
             text,
             chat_id=chat_id,
             message_id=message_id,
-            reply_markup=None if final else broadcast_progress_keyboard(broadcast_id),
+            reply_markup=admin_panel_keyboard() if final else broadcast_progress_keyboard(broadcast_id),
         )
     except TelegramAPIError as exc:
         # The admin may have deleted/navigated away from the progress

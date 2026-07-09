@@ -12,7 +12,7 @@ from collections.abc import Sequence
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.keyboards.movie import (
@@ -59,10 +59,20 @@ SERIES_NOT_FOUND_TEXT = "Serial topilmadi."
 SEASON_NOT_FOUND_TEXT = "Fasl topilmadi."
 NO_SEASONS_TEXT = "Bu serialda hozircha fasllar yo'q."
 NO_EPISODES_TEXT = "Bu faslda hozircha qismlar yo'q."
+SEASONS_LABEL_TEXT = "📂 Fasllar:"
+EPISODES_LABEL_TEXT = "🎞 Qismlar:"
 
 
 def _movie_rows_text(movies: Sequence[Movie]) -> str:
     return "\n".join(f"• {movie.title} — <code>{movie.code}</code>" for movie in movies)
+
+
+def _with_back_row(keyboard: InlineKeyboardMarkup, callback_data: str, text: str = "⬅️ Orqaga") -> InlineKeyboardMarkup:
+    """Appends a back row to an existing keyboard — every browse/list screen ends
+    with one of these so drilling down never becomes a dead end."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[*keyboard.inline_keyboard, [InlineKeyboardButton(text=text, callback_data=callback_data)]]
+    )
 
 
 async def _edit_detail(message: Message, text: str, keyboard: InlineKeyboardMarkup) -> None:
@@ -87,7 +97,8 @@ async def show_movie_detail(callback: CallbackQuery, session: AsyncSession) -> N
         await callback.answer(MOVIE_NOT_FOUND_TEXT, show_alert=True)
         return
 
-    text = f"<b>{movie.title}</b>\n\n{movie.description or ''}".rstrip()
+    source_line = f"\n\n📡 Manba: {movie.source_channel}" if movie.source_channel else ""
+    text = f"<b>{movie.title}</b>\n\n{movie.description or ''}{source_line}".rstrip()
     keyboard = movie_detail_keyboard(movie.code)
     if movie.poster_file_id:
         await callback.message.answer_photo(photo=movie.poster_file_id, caption=text, reply_markup=keyboard)
@@ -103,6 +114,17 @@ async def show_movie_detail(callback: CallbackQuery, session: AsyncSession) -> N
 async def open_browse_menu(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(BROWSE_MENU_TEXT, reply_markup=browse_menu_keyboard())
+
+
+@router.callback_query(F.data == "mv:browse", flags={"content_gate": True})
+async def back_to_browse_menu(callback: CallbackQuery, state: FSMContext) -> None:
+    """The one common "back" target every browse/list/search screen below falls
+    back to — reachable from anywhere in this router without needing to track
+    exactly which list the admin drilled down from."""
+    await state.clear()
+    if isinstance(callback.message, Message):
+        await _edit_detail(callback.message, BROWSE_MENU_TEXT, browse_menu_keyboard())
+    await callback.answer()
 
 
 # --- Free-text title search ---------------------------------------------------
@@ -130,14 +152,20 @@ async def _build_search_page(session: AsyncSession, query: str, page: int) -> tu
         page_callback="mv:search:page:{page}",
     )
     combined_rows = [*series_results_keyboard(series_list).inline_keyboard, *movie_keyboard.inline_keyboard]
-    return text, InlineKeyboardMarkup(inline_keyboard=combined_rows)
+    keyboard = _with_back_row(InlineKeyboardMarkup(inline_keyboard=combined_rows), "mv:browse")
+    return text, keyboard
 
 
 @router.callback_query(F.data == "mv:search", flags={"content_gate": True})
 async def start_search(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(SearchStates.waiting_for_query)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(SEARCH_QUERY_PROMPT)
+        await callback.message.edit_text(
+            SEARCH_QUERY_PROMPT,
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="⬅️ Orqaga", callback_data="mv:browse")]]
+            ),
+        )
     await callback.answer()
 
 
@@ -182,9 +210,8 @@ async def _render_static_list(callback: CallbackQuery, header: str, movies: Sequ
         return
 
     body = _movie_rows_text(movies) if movies else NO_RESULTS_TEXT
-    await callback.message.edit_text(
-        f"{header}\n\n{body}", reply_markup=movie_list_keyboard(movies, _DETAIL_CALLBACK)
-    )
+    keyboard = _with_back_row(movie_list_keyboard(movies, _DETAIL_CALLBACK), "mv:browse")
+    await callback.message.edit_text(f"{header}\n\n{body}", reply_markup=keyboard)
     await callback.answer()
 
 
@@ -220,10 +247,12 @@ async def show_categories(callback: CallbackQuery, session: AsyncSession, state:
         return
 
     categories = await CategoryRepository(session).list_active()
+    back_only = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Orqaga", callback_data="mv:browse")]])
     if not categories:
-        await callback.message.edit_text(NO_CATEGORIES_TEXT)
+        await callback.message.edit_text(NO_CATEGORIES_TEXT, reply_markup=back_only)
     else:
-        await callback.message.edit_text(CATEGORY_LIST_TEXT, reply_markup=category_list_keyboard(categories))
+        keyboard = _with_back_row(category_list_keyboard(categories), "mv:browse")
+        await callback.message.edit_text(CATEGORY_LIST_TEXT, reply_markup=keyboard)
     await callback.answer()
 
 
@@ -245,6 +274,7 @@ async def _build_category_page(
         total_pages=total_pages,
         page_callback=f"mv:cat:{category_id}:{{page}}",
     )
+    keyboard = _with_back_row(keyboard, "mv:cats")
     return f"{header}\n\n{body}", keyboard
 
 
@@ -257,7 +287,10 @@ async def show_category_movies(callback: CallbackQuery, session: AsyncSession) -
     category_id_str, page_str = callback.data.removeprefix("mv:cat:").split(":")
     result = await _build_category_page(session, int(category_id_str), int(page_str))
     if result is None:
-        await callback.message.edit_text(CATEGORY_NOT_FOUND_TEXT)
+        back_only = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="⬅️ Orqaga", callback_data="mv:cats")]]
+        )
+        await callback.message.edit_text(CATEGORY_NOT_FOUND_TEXT, reply_markup=back_only)
         await callback.answer()
         return
 
@@ -285,10 +318,11 @@ async def _build_season_page(
         series_id, SEASON_PAGE_SIZE, (page - 1) * SEASON_PAGE_SIZE
     )
     total_pages = max(1, math.ceil(total / SEASON_PAGE_SIZE))
-    header = f"📺 <b>{series.title}</b>\n\n{series.description or ''}".rstrip()
-    body = NO_SEASONS_TEXT if not seasons else ""
+    source_line = f"\n\n📡 Manba: {series.source_channel}" if series.source_channel else ""
+    header = f"📺 <b>{series.title}</b>\n\n{series.description or ''}{source_line}".rstrip()
+    body = NO_SEASONS_TEXT if not seasons else SEASONS_LABEL_TEXT
     text = f"{header}\n\n{body}" if body else header
-    keyboard = season_list_keyboard(seasons, series_id, page=page, total_pages=total_pages)
+    keyboard = _with_back_row(season_list_keyboard(seasons, series_id, page=page, total_pages=total_pages), "mv:browse")
     return text, keyboard
 
 
@@ -345,9 +379,9 @@ async def _build_episode_page(
     episodes, total = await service.list_episodes(season_id, EPISODE_PAGE_SIZE, (page - 1) * EPISODE_PAGE_SIZE)
     total_pages = max(1, math.ceil(total / EPISODE_PAGE_SIZE))
     header = f"📺 <b>{series.title if series else '?'} — {season.number}-fasl</b> ({page}/{total_pages}):"
-    body = "" if episodes else NO_EPISODES_TEXT
+    body = NO_EPISODES_TEXT if not episodes else EPISODES_LABEL_TEXT
     text = f"{header}\n\n{body}" if body else header
-    keyboard = episode_list_keyboard(episodes, season_id, page=page, total_pages=total_pages)
+    keyboard = episode_list_keyboard(episodes, season_id, page=page, total_pages=total_pages, series_id=season.series_id)
     return text, keyboard
 
 

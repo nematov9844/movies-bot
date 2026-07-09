@@ -26,6 +26,10 @@ _TOGGLE_KEYS = {"maintenance_mode", "force_subscribe_enabled", "premium_enabled"
 _EDIT_PROMPTS = {
     "welcome_text": "💬 Yangi salomlashuv matnini kiriting:",
     "support_username": "🆘 Yangi qo'llab-quvvatlash username'ini kiriting (masalan @support):",
+    "payment_details": (
+        "💳 To'lov rekvizitlarini kiriting (masalan: karta raqami, egasi, telefon) — "
+        "bu foydalanuvchiga tarif tanlaganda ko'rsatiladi:"
+    ),
 }
 VALUE_EMPTY_TEXT = "❌ Qiymat bo'sh bo'lishi mumkin emas. Qayta kiriting:"
 SAVED_TEXT = "✅ Saqlandi."
@@ -38,6 +42,7 @@ async def _menu_content(session: AsyncSession) -> tuple[str, InlineKeyboardMarku
     premium = await service.get_bool("premium_enabled", default=True)
     welcome_text = await service.get("welcome_text") or "—"
     support_username = await service.get("support_username") or "—"
+    payment_details = await service.get("payment_details") or "— (hali kiritilmagan)"
 
     text = settings_menu_text(
         maintenance=maintenance,
@@ -45,6 +50,7 @@ async def _menu_content(session: AsyncSession) -> tuple[str, InlineKeyboardMarku
         premium=premium,
         welcome_text=welcome_text,
         support_username=support_username,
+        payment_details=payment_details,
     )
     keyboard = settings_menu_keyboard(
         maintenance=maintenance, force_subscribe=force_subscribe, premium=premium

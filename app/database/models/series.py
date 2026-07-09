@@ -13,6 +13,10 @@ class Series(Base, TimestampMixin):
     title: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     poster_file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Which upstream Telegram channel this came from (set by the auto-ingest pipeline,
+    # never by an admin) — kept separate from ``description`` so that field stays free
+    # for an actual synopsis without the two colliding.
+    source_channel: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
     seasons: Mapped[list["Season"]] = relationship(

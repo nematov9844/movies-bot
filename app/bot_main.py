@@ -12,6 +12,7 @@ from app.bot.middlewares import (
     DbSessionMiddleware,
     ForceSubscribeMiddleware,
     MaintenanceMiddleware,
+    MenuEscapeMiddleware,
     MetricsMiddleware,
     ThrottlingMiddleware,
     UserUpsertMiddleware,
@@ -42,6 +43,13 @@ def _setup_middlewares(dp: Dispatcher) -> None:
     dp.update.outer_middleware(UserUpsertMiddleware())
     dp.update.outer_middleware(MaintenanceMiddleware())
     dp.update.outer_middleware(ThrottlingMiddleware())
+
+    # Message-only outer middleware: must run before aiogram matches the update
+    # against any state-filtered handler, so it has to wrap dp.message itself
+    # rather than the shared dp.update observer above (which runs too early to
+    # know this update is even a message, but that's fine — state resolution
+    # and handler routing both happen after this point regardless).
+    dp.message.outer_middleware(MenuEscapeMiddleware())
 
     # Inner (not outer) middleware: per-handler flags like `content_gate` are
     # only resolvable once aiogram has matched a specific handler, which
@@ -81,8 +89,12 @@ async def main() -> None:
     # Phase 14: bot_updates_total/bot_movies_sent_total/bot_errors_total on
     # their own port, scraped by prometheus.yml's movie_platform_bot job —
     # separate from the API's /metrics since the bot has no HTTP server of
-    # its own to attach an endpoint to.
-    start_http_server(METRICS_PORT)
+    # its own to attach an endpoint to. Bound to loopback only: the bot
+    # container runs with host networking (so it can reach the host-only
+    # Ollama instance on 127.0.0.1), which means an unrestricted 0.0.0.0
+    # bind here would put this on every interface the host has, not just
+    # (as before, via Docker's own port-publish restriction) localhost.
+    start_http_server(METRICS_PORT, addr="127.0.0.1")
     await _ensure_owner_seeded()
 
     bot = Bot(

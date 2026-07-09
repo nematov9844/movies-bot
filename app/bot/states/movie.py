@@ -26,6 +26,7 @@ class MovieManageStates(StatesGroup):
     waiting_for_code = State()
     waiting_for_edit_value = State()
     waiting_for_edit_categories = State()
+    waiting_for_poster = State()
 
 
 class SearchStates(StatesGroup):

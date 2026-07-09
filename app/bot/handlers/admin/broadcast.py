@@ -16,10 +16,12 @@ worker notices within its ~10s polling cadence.
 
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.filters import HasPermission
+from app.bot.handlers.admin.panel import PANEL_TEXT
+from app.bot.keyboards.admin_panel import admin_panel_keyboard
 from app.bot.keyboards.broadcast import (
     TARGET_LABELS,
     broadcast_confirm_keyboard,
@@ -61,7 +63,12 @@ async def start_broadcast(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(BroadcastStates.waiting_for_message)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(MESSAGE_PROMPT)
+        await callback.message.edit_text(
+            MESSAGE_PROMPT,
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="⬅️ Bekor qilish", callback_data="bc:cancel_setup")]]
+            ),
+        )
     await callback.answer()
 
 
@@ -175,7 +182,7 @@ async def confirm_broadcast(callback: CallbackQuery, state: FSMContext, session:
 async def cancel_broadcast_setup(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(CANCELLED_TEXT)
+        await callback.message.edit_text(f"{CANCELLED_TEXT}\n\n{PANEL_TEXT}", reply_markup=admin_panel_keyboard())
     await callback.answer()
 
 
