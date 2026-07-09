@@ -14,7 +14,15 @@ services:
       timeout: 5s
       retries: 10
     ports:
-      - "127.0.0.1:5432:5432"
+      # Host-side port only — every service inside the compose network
+      # still reaches Postgres at its own internal 5432 regardless (via
+      # POSTGRES_HOST=postgres from .env), unaffected by this. Only
+      # matters for host-shell tools (psql, scripts/backup.sh, an
+      # external DB client) and only needs to change if 5432 is already
+      # taken by something else on this machine — set POSTGRES_HOST_PORT
+      # in .env instead of editing this file directly, which would
+      # otherwise conflict with every future `git pull`.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
 
   redis:
     image: redis:7-alpine
