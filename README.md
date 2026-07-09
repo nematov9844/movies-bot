@@ -181,14 +181,27 @@ docker compose up -d --build migrations bot   # keyin qolganini ko'tarish
 
 Tekshirish: Telegram'da botga `/start` yuboring — javob qaytishi kerak.
 
-**Ollama (ixtiyoriy, AI-yordamchi caption-parser uchun):** agar shu
-serverda Ollama ham ishlab tursa (`ollama serve`, `127.0.0.1:11434`), `bot`
-servisi `network_mode: host` bilan ishlaydi — shu sababli Ollama'ning o'zi
-hech qachon `127.0.0.1`dan tashqariga ochilmasa ham bot unga ulana oladi.
-`.env`da `OLLAMA_BASE_URL=http://127.0.0.1:11434` qo'ying. Agar bu serverda
-Ollama bo'lmasa, shunchaki bo'sh qoldiring — hech narsa buzilmaydi, faqat
-AI-fallback bosqichi ishlamaydi (regex asosidagi parser barcha holatda
-ishlayveradi).
+**Ollama (ixtiyoriy, AI-yordamchi caption-parser uchun, faqat lokal
+ishlab chiqish uchun):** standart holatda `bot` servisi oddiy (bridge)
+tarmoqda ishlaydi va Ollama sozlanmagan bo'lsa hech narsa buzilmaydi —
+faqat AI-fallback bosqichi ishlamaydi (regex asosidagi parser barcha
+holatda ishlayveradi). Agar shu mashinada Ollama ham ishlab tursa
+(`ollama serve`, `127.0.0.1:11434`) va bot unga ulanishini xohlasangiz,
+`docker-compose.yml`da `bot` servisiga qo'lda qo'shing:
+```yaml
+    network_mode: host
+    environment:
+      POSTGRES_HOST: localhost
+      REDIS_HOST: localhost
+      OLLAMA_BASE_URL: http://127.0.0.1:11434
+```
+**Diqqat:** bu holatda `POSTGRES_HOST`/`REDIS_HOST` endi compose tarmog'i
+o'rniga host portlariga ishora qiladi — agar Postgres/Redis host-porti
+standart (5432/6379)dan boshqacha bo'lsa (masalan port to'qnashuvi
+tufayli o'zgartirilgan bo'lsa), yuqoridagi `environment:` blokiga
+`POSTGRES_PORT`/`REDIS_PORT`ni ham to'g'ri qiymat bilan qo'shing — aks
+holda bot bazaga ulana olmay qoladi. Bir nechta boshqa loyiha ishlab
+turgan (umumiy) serverda buni yoqishdan oldin shuni hisobga oling.
 
 Keyinchalik web panel/API kerak bo'lsa, pastdagi "Serverga to'liq
 joylashtirish" bo'limiga o'ting — u yerdagi qadamlar shu bazani (allaqachon

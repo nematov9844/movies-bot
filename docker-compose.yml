@@ -47,22 +47,6 @@ services:
       dockerfile: docker/Dockerfile
     restart: unless-stopped
     env_file: .env
-    # Host networking (Linux-only) so the bot can reach the host's own
-    # Ollama instance at 127.0.0.1:11434 for AI-assisted caption parsing —
-    # Ollama stays bound to loopback-only on the host itself (never
-    # rebound to 0.0.0.0 or the docker bridge), so this is the only way in
-    # without widening Ollama's own exposure. Overrides below repoint
-    # POSTGRES_HOST/REDIS_HOST at the host-published ports instead of the
-    # compose-network service names, since this container is no longer on
-    # that bridge network. Trade-off: prometheus.yml's `bot:9100` scrape
-    # target (the "monitoring" profile, not on by default) would need to
-    # become `127.0.0.1:9100` reachable from the host side too if that
-    # profile is ever turned on.
-    network_mode: host
-    environment:
-      POSTGRES_HOST: localhost
-      REDIS_HOST: localhost
-      OLLAMA_BASE_URL: http://127.0.0.1:11434
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,6 +55,8 @@ services:
       migrations:
         condition: service_completed_successfully
     command: python -m app.bot_main
+    ports:
+      - "127.0.0.1:9100:9100"
 
   api:
     build:
